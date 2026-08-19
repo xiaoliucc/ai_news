@@ -1,0 +1,363 @@
+/* ============================================================
+   ENDFIELD DESIGN TOKENS
+   《明日方舟：终末地》UI 风格令牌
+   - 所有派生色由 OKLCH 主令牌计算，禁止散落裸色值
+   - 几何语言：锐利直角（≤2px 切角）、斜切标签、方形指示灯
+   ============================================================ */
+
+:root {
+  /* --- 层级背景（OKLCH 换算自需求规格） --- */
+  --bg: oklch(16.43% 0.0202 265.75);              /* #0a0e17 主背景 */
+  --surface: oklch(21.06% 0.0270 267.87);          /* #131825 面板/卡片 */
+  --surface-raised: oklch(24.55% 0.0319 268.20);   /* #1a2030 悬浮升阶 */
+  --surface-hover: oklch(24.55% 0.0319 268.20);    /* #1a2030 悬停 */
+  --input-bg: oklch(19.24% 0.0257 266.63);         /* #0f1420 输入 */
+  --surface-active: oklch(17.2% 0.0220 267.40);    /* #0c101a 按压降阶 */
+
+  /* --- 功能色 --- */
+  --accent: oklch(77.47% 0.1507 171.66);           /* #00d4aa 工业青 */
+  --accent-dim: oklch(69.72% 0.1351 172.08);       /* #00b894 激活偏暗 */
+  --accent-mono: oklch(47.5% 0.1064 170.80);       /* #006f54 图表暗化版 */
+  --warn: oklch(69.38% 0.1560 48.06);              /* #e87a3a 低饱和橙 */
+  --blue: oklch(62.31% 0.1880 259.81);             /* #3b82f6 源系列 */
+  --purple: oklch(62.69% 0.2325 303.90);           /* #a855f7 源系列 */
+
+  /* --- 文字 --- */
+  --fg: oklch(92.88% 0.0126 255.51);               /* #e2e8f0 主文字 */
+  --muted: oklch(55.44% 0.0407 257.42);            /* #64748b 次级文字 */
+  --disabled: oklch(37.17% 0.0392 257.29);         /* #334155 禁用 */
+
+  /* --- 结构 --- */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --keyline: 2px solid var(--accent);
+
+  /* --- 强调色透明度派生（替代散落硬编码 rgba） --- */
+  --accent-rgb: 0, 212, 170;
+  --accent-06: rgba(0, 212, 170, 0.06);
+  --accent-08: rgba(0, 212, 170, 0.08);
+  --accent-10: rgba(0, 212, 170, 0.1);
+  --accent-18: rgba(0, 212, 170, 0.18);
+  --accent-35: rgba(0, 212, 170, 0.35);
+  --accent-40: rgba(0, 212, 170, 0.4);
+  /* 强调色上的深色文字/滑块 */
+  --accent-ink: #0a0e17;
+
+  /* --- 字体（Rajdhani/JetBrains Mono 异步加载，未就绪时回退本地字体） --- */
+  --font-display: 'Rajdhani', 'Bahnschrift', 'Segoe UI', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+
+  /* --- 尺寸 --- */
+  --topbar-h: 56px;
+  --sidebar-w: 280px;
+  --sidebar-w-collapsed: 64px;
+  --panel-w: 360px;
+  --gap: 12px;
+  --radius: 2px;
+
+  /* --- 动效 --- */
+  --ease-endfield: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --dur: 200ms;
+}
+
+/* 滚动条：方角细轨，终末地风格（青色主题滑块 #2a3344，与 example.html theme A 一致） */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a3344;
+  border: none;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--disabled);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3344 transparent;
+}
+
+/* ============================================================
+   主题 B：近未来科幻工业风（哑黑 + 荧光柠檬黄）
+   三栏结构 / 布局 / 功能逻辑与青色主题完全一致，仅换视觉皮肤
+   ============================================================ */
+[data-theme='yellow'] {
+  --bg: oklch(6.5% 0.001 285);
+  --surface: oklch(12.2% 0.001 285);
+  --surface-raised: oklch(16.8% 0.001 285);
+  --surface-hover: oklch(16.8% 0.001 285);
+  --input-bg: oklch(9.8% 0.001 285);
+  --accent: oklch(95.6% 0.2 111);
+  --accent-dim: oklch(88% 0.19 111);
+  --warn: oklch(72% 0.15 45);
+  --blue: oklch(75% 0.09 255);
+  --purple: oklch(75% 0.13 320);
+  --fg: oklch(97.5% 0.002 85);
+  --muted: oklch(76% 0.01 85);
+  --disabled: oklch(42% 0.01 285);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent-06: rgba(234, 255, 0, 0.06);
+  --accent-08: rgba(234, 255, 0, 0.08);
+  --accent-10: rgba(234, 255, 0, 0.1);
+  --accent-18: rgba(234, 255, 0, 0.18);
+  --accent-35: rgba(234, 255, 0, 0.35);
+  --accent-40: rgba(234, 255, 0, 0.4);
+  --accent-ink: oklch(6.5% 0.001 285);
+  --accent-rgb: 234, 255, 0;
+}
+/* 哑光吸光材质底 + 细网格网点 */
+[data-theme='yellow'] body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(234, 255, 0, 0.025), transparent 60%),
+    linear-gradient(rgba(234, 255, 0, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(234, 255, 0, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+  position: relative;
+}
+/* 低对比度数字颗粒噪点 */
+[data-theme='yellow'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.045'/></svg>");
+}
+/* 极淡屏幕扫描线 */
+[data-theme='yellow'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.018) 0 1px,
+    transparent 1px 3px
+  );
+}
+[data-theme='yellow'] .layout {
+  position: relative;
+  z-index: 1;
+}
+[data-theme='yellow'] ::-webkit-scrollbar-thumb {
+  background: #3d3b44;
+}
+/* 半透明磨砂面板 */
+[data-theme='yellow'] .acard,
+[data-theme='yellow'] .sitem,
+[data-theme='yellow'] .stat,
+[data-theme='yellow'] .tcard,
+[data-theme='yellow'] .el-input__wrapper,
+[data-theme='yellow'] .el-textarea__inner,
+[data-theme='yellow'] .el-select__wrapper,
+[data-theme='yellow'] .el-select-dropdown,
+[data-theme='yellow'] .el-popper.is-light,
+[data-theme='yellow'] .el-message,
+[data-theme='yellow'] .el-skeleton__item {
+  background-color: rgba(22, 22, 28, 0.96); /* 半透明实色磨砂（无 backdrop-filter，规避 Chromium 最小化 GPU 冻结） */
+}
+/* 侧边栏/功能按钮：半透明白色磨砂玻璃 + 微距下沉投影 */
+[data-theme='yellow'] .el-button,
+[data-theme='yellow'] .vbtn,
+[data-theme='yellow'] .abtn,
+[data-theme='yellow'] .frange__btn,
+[data-theme='yellow'] .pager__btn,
+[data-theme='yellow'] .topbar__icon-btn,
+[data-theme='yellow'] .spanel__icon {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+[data-theme='yellow'] .sitem {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* 中央信息卡片：微透视倾斜 + 银灰金属高光描边 */
+[data-theme='yellow'] .acard,
+[data-theme='yellow'] .tcard {
+  border: 1px solid rgba(208, 214, 228, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 18px rgba(234, 255, 0, 0.045);
+}
+[data-theme='yellow'] .acard {
+  transform: perspective(1100px) rotateX(0.8deg);
+  transform-origin: top center;
+}
+[data-theme='yellow'] .tcard {
+  transform: perspective(1200px) rotateX(0.6deg);
+  transform-origin: top center;
+}
+[data-theme='yellow'] .acard:hover,
+[data-theme='yellow'] .sitem:hover {
+  border-color: var(--accent-35);
+  background-color: var(--surface-raised);
+}
+/* 局部自发光边缘晕影 */
+[data-theme='yellow'] .acard__corner {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(234, 255, 0, 0.75);
+}
+[data-theme='yellow'] .sitem__dot.is-on,
+[data-theme='yellow'] .topbar__state-dot.is-ok,
+[data-theme='yellow'] .state__dot.is-ok {
+  box-shadow: 0 0 7px rgba(234, 255, 0, 0.8);
+}
+[data-theme='yellow'] .vbtn.is-active,
+[data-theme='yellow'] .aview__view-btn.is-active {
+  box-shadow: 0 0 16px rgba(234, 255, 0, 0.35), inset 0 0 8px rgba(234, 255, 0, 0.2);
+}
+/* AI 解读按钮：荧光黄描边 + 悬停发光填充 */
+[data-theme='yellow'] .acard__ai {
+  border-color: var(--accent);
+  background: rgba(234, 255, 0, 0.08);
+  box-shadow: 0 0 10px rgba(234, 255, 0, 0.18);
+}
+[data-theme='yellow'] .acard__ai:hover {
+  background: var(--accent);
+  box-shadow: 0 0 18px rgba(234, 255, 0, 0.45);
+}
+/* 手动采集按钮：荧光黄描边斜切 */
+[data-theme='yellow'] .shead__collect {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(234, 255, 0, 0.08);
+}
+[data-theme='yellow'] .shead__collect:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+[data-theme='yellow'] .el-button--primary,
+[data-theme='yellow'] .asend {
+  box-shadow: 0 0 18px rgba(234, 255, 0, 0.28);
+}
+[data-theme='yellow'] .el-switch.is-checked .el-switch__core {
+  box-shadow: 0 0 8px rgba(234, 255, 0, 0.55);
+}
+/* 顶栏与面板头部：金属磨砂 + 荧光微光 */
+[data-theme='yellow'] .topbar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  border-bottom: 1px solid rgba(234, 255, 0, 0.16);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+[data-theme='yellow'] .topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(234, 255, 0, 0.55), transparent);
+  pointer-events: none;
+}
+[data-theme='yellow'] .shead,
+[data-theme='yellow'] .ahead,
+[data-theme='yellow'] .mtool,
+[data-theme='yellow'] .hcol__head,
+[data-theme='yellow'] .tcard__head {
+  border-bottom-color: rgba(234, 255, 0, 0.12);
+}
+[data-theme='yellow'] .shead__title,
+[data-theme='yellow'] .ahead__title,
+[data-theme='yellow'] .hcol__title,
+[data-theme='yellow'] .tcard__title {
+  text-shadow: 0 0 12px rgba(234, 255, 0, 0.28);
+}
+/* 分组标题：荧光黄标签文字 */
+[data-theme='yellow'] .spanel__group-title,
+[data-theme='yellow'] .gtitle {
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(234, 255, 0, 0.3);
+  letter-spacing: 4px;
+}
+/* 消息气泡磨砂 */
+[data-theme='yellow'] .bubble.is-user .bubble__body {
+  background: rgba(30, 30, 38, 0.92);
+  border-left-color: var(--accent);
+}
+[data-theme='yellow'] .bubble.is-ai .bubble__body {
+  background: rgba(22, 22, 28, 0.92);
+}
+/* 警告条/提示：荧光描边 */
+[data-theme='yellow'] .spanel__warn,
+[data-theme='yellow'] .swarn,
+[data-theme='yellow'] .hint,
+[data-theme='yellow'] .aview__hint {
+  border-left-color: var(--accent);
+  background: rgba(234, 255, 0, 0.05);
+}
+[data-theme='yellow'] .swarn__text {
+  color: var(--fg);
+}
+[data-theme='yellow'] .hint__icon,
+[data-theme='yellow'] .aview__hint-icon {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(234, 255, 0, 0.7);
+}
+/* 文章标签：荧光黄 + 辉光 */
+[data-theme='yellow'] .acard__tag,
+[data-theme='yellow'] .el-tag {
+  color: var(--accent);
+  border-color: rgba(234, 255, 0, 0.3);
+  text-shadow: 0 0 8px rgba(234, 255, 0, 0.35);
+}
+/* 统计块：磨砂 + 荧光描边 */
+[data-theme='yellow'] .stat {
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+[data-theme='yellow'] .stat__value.is-accent {
+  text-shadow: 0 0 10px rgba(234, 255, 0, 0.45);
+}
+/* 弹层磨砂深底 */
+[data-theme='yellow'] .el-select-dropdown,
+[data-theme='yellow'] .el-popper.is-light {
+  background: rgba(17, 17, 22, 0.98);
+  border-color: rgba(234, 255, 0, 0.22);
+}
+[data-theme='yellow'] .el-dropdown-menu__item:hover {
+  color: var(--accent);
+}
+/* 空状态荧光角标 */
+[data-theme='yellow'] .empty__mark::after {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(234, 255, 0, 0.7);
+}
+
+/* ============================================================
+   基础层 —— 青色主题（theme A，默认外观）
+   与 example.html 的 theme A 一致：全局重置 + body 默认排版
+   + .mono 等位等宽工具类
+   ============================================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+/* 等宽工具类：时间/分数/页码等数据（模板中大量使用） */
+.mono {
+  font-family: var(--font-mono);
+}
+button {
+  font-family: inherit;
+}

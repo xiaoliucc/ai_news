@@ -1,0 +1,29 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Secrets
+.env
+.env.*
+
+# Local database files
+data/
+backend/db/
+*.db
+*.db-wal
+*.db-shm
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# IDE / local tooling config
+.idea/
+.claude/

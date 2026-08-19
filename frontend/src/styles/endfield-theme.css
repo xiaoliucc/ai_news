@@ -1,0 +1,369 @@
+/* ============================================================
+   ENDFIELD THEME —— Element Plus 全量覆写
+   目标：消除 EP 默认圆润样式，统一为终末地 HUD 语言
+   覆盖范围：el-button / el-input / el-select / el-switch /
+   el-tag / el-card / el-dropdown / el-tooltip / el-scrollbar /
+   el-message / el-empty / el-skeleton / el-overlay
+   ============================================================ */
+
+/* ---------- 基础布局块 ---------- */
+.el-container,
+.el-aside,
+.el-main,
+.el-header {
+  background: transparent;
+  padding: 0;
+}
+
+/* ---------- 按钮 ---------- */
+.el-button {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  height: 32px;
+  padding: 0 14px;
+  transition: background var(--dur) var(--ease-endfield),
+    border-color var(--dur) var(--ease-endfield),
+    color var(--dur) var(--ease-endfield), transform 80ms var(--ease-endfield);
+}
+.el-button:hover,
+.el-button:focus-visible {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.el-button:active {
+  transform: scale(0.98);
+  border-color: var(--accent);
+}
+.el-button.is-disabled,
+.el-button.is-disabled:hover {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--disabled);
+}
+/* 主按钮：斜切 + 青色填充 */
+.el-button--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  border: none;
+}
+.el-button--primary:hover,
+.el-button--primary:focus-visible {
+  background: var(--accent-dim);
+  border: none;
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 12px rgba(var(--accent-rgb), 0.25);
+}
+/* 次按钮：斜切描边（通过 .ef-btn-outline 类使用，EP type 用合法值 default） */
+.ef-btn-outline {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.ef-btn-outline:hover,
+.ef-btn-outline:focus-visible {
+  background: var(--accent-08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.el-button.is-round {
+  border-radius: 999px;
+}
+
+/* ---------- 输入框 / 文本域 ---------- */
+.el-input__wrapper,
+.el-textarea__inner {
+  background: var(--input-bg);
+  box-shadow: 0 0 0 1px var(--border) inset;
+  border-radius: var(--radius);
+  transition: box-shadow var(--dur) var(--ease-endfield),
+    background var(--dur) var(--ease-endfield);
+}
+.el-input__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--border-strong) inset;
+}
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  background: var(--input-bg);
+}
+.el-input__inner,
+.el-textarea__inner {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--fg);
+  caret-color: var(--accent);
+}
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--disabled);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.el-input__inner {
+  height: 32px;
+  line-height: 32px;
+}
+.el-textarea__inner {
+  line-height: 1.6;
+  padding: 8px 10px;
+  resize: none;
+}
+.el-input__count,
+.el-textarea__count {
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* ---------- 下拉选择 ---------- */
+.el-select__wrapper {
+  background: var(--input-bg);
+  box-shadow: 0 0 0 1px var(--border) inset;
+  border-radius: var(--radius);
+  min-height: 32px;
+  transition: box-shadow var(--dur) var(--ease-endfield);
+}
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--border-strong) inset;
+}
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.el-select__placeholder {
+  color: var(--disabled);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.el-select-dropdown {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.el-select-dropdown__item {
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  border-radius: 0;
+  padding: 0 14px;
+  height: 32px;
+  line-height: 32px;
+}
+.el-select-dropdown__item.is-hovering {
+  background: var(--surface-hover);
+}
+.el-select-dropdown__item.is-selected {
+  color: var(--accent);
+  background: var(--accent-08);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.el-select-dropdown__item.is-selected::after {
+  content: none;
+}
+.el-select-dropdown__empty {
+  padding: 8px;
+  color: var(--muted);
+}
+
+/* ---------- 开关（EP 2.8 的滑块是 .el-switch__action 元素，非 ::after 伪元素） ---------- */
+.el-switch {
+  --el-switch-on-color: var(--accent);
+  --el-switch-off-color: var(--input-bg);
+  height: 16px;
+}
+/* 轨道：关闭 = 灰色，开启 = 对应主题色 */
+.el-switch__core {
+  width: 34px;
+  min-width: 34px;
+  height: 2px;
+  border: none;
+  border-radius: 0;
+  background: var(--disabled);
+  transition: background-color var(--dur) var(--ease-endfield);
+}
+/* 方形滑块：关闭 = 灰色，开启 = 对应主题色（青 / 黄） */
+.el-switch__core .el-switch__action {
+  border-radius: 0;
+  background-color: var(--muted);
+  width: 10px;
+  height: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+  transition: left var(--dur) var(--ease-endfield),
+    background-color var(--dur) var(--ease-endfield);
+}
+.el-switch.is-checked .el-switch__core {
+  background: var(--accent);
+}
+.el-switch.is-checked .el-switch__core .el-switch__action {
+  left: calc(100% - 10px);
+  background-color: var(--accent);
+}
+.el-switch.is-disabled .el-switch__core {
+  background: var(--surface-active);
+}
+.el-switch.is-disabled .el-switch__core .el-switch__action {
+  background-color: var(--disabled);
+}
+
+/* ---------- 标签 ---------- */
+.el-tag {
+  border-radius: var(--radius);
+  border: none;
+  background: var(--accent-10);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 0 8px;
+  height: 20px;
+  line-height: 20px;
+}
+.el-tag .el-tag__close {
+  color: var(--accent);
+}
+
+/* ---------- 卡片（项目内使用自定义 .ef-card，此处兜底） ---------- */
+.el-card {
+  border-radius: var(--radius);
+  border: none;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+/* ---------- 下拉菜单（历史记录等） ---------- */
+.el-dropdown-menu {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+}
+.el-dropdown-menu__item {
+  font-size: 12px;
+  color: var(--fg);
+  border-radius: 0;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.el-dropdown-menu__item:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+.el-dropdown-menu__item:not(.is-disabled):focus {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+.el-dropdown-menu__item.is-disabled {
+  color: var(--disabled);
+  cursor: not-allowed;
+}
+
+/* ---------- 弹层 ---------- */
+.el-popper.is-light {
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.el-popper__arrow::before {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+/* ---------- 滚动条（el-scrollbar 视图） ---------- */
+.el-scrollbar__bar.is-vertical > div {
+  width: 4px;
+  background: #2a3344;
+  border-radius: 0;
+}
+
+/* ---------- 消息提示 ---------- */
+.el-message {
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--fg);
+}
+.el-message .el-message__icon {
+  color: var(--accent);
+}
+.el-message--warning .el-message__icon {
+  color: var(--warn);
+}
+
+/* ---------- 空状态 ---------- */
+.el-empty__image svg {
+  width: 96px;
+  height: 96px;
+}
+.el-empty__description p {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- 骨架屏 ---------- */
+.el-skeleton__item {
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.el-skeleton__item.el-skeleton__p {
+  height: 13px;
+}
+
+/* ---------- 弹窗遮罩（确认清空等） ---------- */
+.el-overlay {
+  background: rgba(10, 14, 23, 0.72);
+}
+.el-dialog {
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+.el-dialog__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+.el-dialog__body {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---------- 焦点可见性：统一青色描边（全局兜底） ---------- */
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}

@@ -1,0 +1,49 @@
+[project]
+name = "ai-research-intelligence-platform"
+version = "0.1.0"
+description = "AI 研究智能平台 — 多源 AI 新闻聚合 Agent"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "apscheduler>=3.11.0",
+    "arxiv>=4.0.0",
+    "click>=8.4.2",
+    "httpx>=0.28.1",
+    "openai>=2.50.0",
+    "python-dotenv>=1.0.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.1",
+    "chromadb>=1.5.9",
+    "sentence-transformers>=5.7.0",
+    "lxml>=6.1.1",
+]
+[project.scripts]
+ai-news = "src.main:cli"
+
+
+[tool.uv]
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+markers = [
+    "unit: 单元测试",
+    "integration: 集成测试（需网络）",
+    "slow: 慢速测试",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.4.0",
+]
