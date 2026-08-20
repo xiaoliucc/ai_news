@@ -27,3 +27,6 @@ frontend/dist/
 # IDE / local tooling config
 .idea/
 .claude/
+
+# OpenDesign vision toolkit runtime artifacts
+.dsh-vision-toolkit/
