@@ -43,17 +43,20 @@ STYLE_RULES = """\
 def build_system_prompt(
     interests: list[str] | None = None,
     reading_history: list[str] | None = None,
+    conversation_summary: str | None = None,
     language: str = "zh",
     data_window_days: int | None = None,
 ) -> str:
     """按用户画像组装 system prompt。
 
     以四段基础规则（PERSONA / DATA_BOUNDARY / TOOL_RULES / STYLE_RULES）
-    为基底，按需追加日期锚点、数据时间窗口、语言策略、用户偏好和阅读历史。
+    为基底，按需追加日期锚点、数据时间窗口、语言策略、用户偏好、阅读历史和
+    跨会话对话记忆（P2）。
 
     Args:
         interests: 用户关注方向，排序和筛选时优先这些领域。
         reading_history: 最近读过的内容标题，避免重复推荐。
+        conversation_summary: 跨会话对话摘要（P2），提供历史结论上下文。
         language: 回复语言，默认 "zh"（正文中文，标题保留原文）。
         data_window_days: 数据覆盖天数，告知 LLM 数据范围以免越界回答。
             Phase 2 时由 scheduler 传入。
@@ -87,6 +90,12 @@ def build_system_prompt(
     if reading_history:
         sections.append(
             "用户最近读过的内容：" + "、".join(reading_history) + "。避免重复推荐。"
+        )
+
+    if conversation_summary:
+        sections.append(
+            "跨会话对话记忆（与用户之前的对话结论）：\n" + conversation_summary
+            + "\n可基于这些历史结论延续话题，不必重复询问。"
         )
 
     return "\n\n".join(sections)

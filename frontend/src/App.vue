@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// 布局组件由 router 的 named views 加载，App 仅挂载根路由视图
+// Element Plus 中文 locale（组件按需自动导入，此处仅注入语言配置）
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 </script>
 
 <template>
-  <router-view />
+  <el-config-provider :locale="zhCn">
+    <router-view />
+  </el-config-provider>
 </template>

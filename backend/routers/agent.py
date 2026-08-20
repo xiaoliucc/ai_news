@@ -1,15 +1,22 @@
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from backend.agent.core import chat
-from backend.database import get_article, get_profile
+from backend.agent.memory import summarize_conversation
+from backend.database import get_article, get_profile, set_profile
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["agent"])
+
+# P2 对话归档：history 超过该条数时，最早部分压缩进摘要，请求只带最近 KEEP_MESSAGES 条
+# （ChatRequest.history 上限 20 条，前端恒传最近 20 条；阈值 12 → 每次归档 8 条滚动生效）
+ARCHIVE_THRESHOLD = 12
+KEEP_MESSAGES = 12
 
 
 class ChatRequest(BaseModel):
@@ -80,12 +87,28 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
         interests = profile.get("interests") or []
     reading_history = _resolve_titles(profile.get("reading_history") or [])
 
+    # P2 对话归档：history 超过阈值时，最早部分增量合并进摘要存库，
+    # 请求只带最近 KEEP_MESSAGES 条（全量历史不再无限膨胀）
+    summary = profile.get("conversation_summary") or None
+    history_for_chat = req.history
+    if req.history and len(req.history) > ARCHIVE_THRESHOLD:
+        archive_msgs = req.history[:-KEEP_MESSAGES]
+        history_for_chat = req.history[-KEEP_MESSAGES:]
+        new_summary = await asyncio.to_thread(
+            summarize_conversation, summary, archive_msgs
+        )
+        if new_summary:
+            set_profile(conversation_summary=new_summary)
+            summary = new_summary
+        # 摘要生成失败：保留旧摘要，仅截断请求历史（优雅降级）
+
     try:
         answer = await chat(
             message=req.message,
-            history=req.history,
+            history=history_for_chat,
             interests=interests,
             reading_history=reading_history,
+            conversation_summary=summary,
         )
     except Exception as exc:
         logger.exception("Agent 对话失败")

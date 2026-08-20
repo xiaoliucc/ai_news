@@ -46,12 +46,14 @@ export function useTheme() {
 /** 图表系列色 / 界面色（非组件环境使用） */
 export const SERIES_COLORS: Record<Theme, Record<string, string>> = {
   cyan: { hackernews: '#00d4aa', arxiv: '#3b82f6', huggingface_papers: '#a855f7', rss: '#e87a3a' },
-  yellow: { hackernews: '#eaff00', arxiv: '#f5f5f2', huggingface_papers: '#c792ea', rss: '#ff8a3d' },
+  // 高饱和亮黄（hackernews 主色）/ 近白（arxiv）/ 低饱和紫（HF）/ 低饱和橙（rss）—— 与参考图一致
+  yellow: { hackernews: '#E8E237', arxiv: '#E8E8E6', huggingface_papers: '#9B8FD6', rss: '#E8A06C' },
 }
 
 export const CHART_UI: Record<Theme, { bg: string; accent: string; axis: string; text: string; ink: string }> = {
   cyan: { bg: '#0a0e17', accent: '#00d4aa', axis: '#334155', text: '#64748b', ink: '#e2e8f0' },
-  yellow: { bg: '#0b0b0f', accent: '#eaff00', axis: '#4a4852', text: '#b8b4ab', ink: '#f5f5f2' },
+  // tooltip 深炭灰底 / 亮黄强调 / 浅区坐标轴灰 / 浅区刻度深灰 / tooltip 内白字
+  yellow: { bg: '#323539', accent: '#E8E237', axis: '#9FA2A6', text: '#55585D', ink: '#E0E2E5' },
 }
 
 export function chartColorsFor(themeValue: Theme) {

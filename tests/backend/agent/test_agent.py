@@ -158,6 +158,21 @@ async def test_chat_injects_reading_history_into_prompt(monkeypatch):
     assert "Attention Is All You Need" in system_prompt
 
 
+@pytest.mark.asyncio
+async def test_chat_injects_conversation_summary_into_prompt(monkeypatch):
+    """chat 收到 conversation_summary 时应注入 system prompt（跨会话记忆）。"""
+    responses = [_replay(content="好的。")]
+    fake = FakeClient(responses)
+    monkeypatch.setattr("backend.agent.core._get_client", lambda: fake)
+    monkeypatch.setattr("backend.agent.core._model_id", lambda: "fake-model")
+
+    await chat("继续", conversation_summary="用户关注推理效率，已推荐 3 篇论文。")
+
+    system_prompt = fake.chat.completions.calls[0]["messages"][0]["content"]
+    assert "跨会话对话记忆" in system_prompt
+    assert "用户关注推理效率" in system_prompt
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.skipif(

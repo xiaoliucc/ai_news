@@ -4,11 +4,15 @@
 覆盖：
     - is_ai_related: LLM 优先 / 回退关键词 / 异常降级
     - score_quality: 正常打分 / clamp / 失败返回 None
+    - _chat_json: 瞬时错误自动重试（网络/超时/5xx/429）/ 4xx 不重试
 """
 
 import json
+from types import SimpleNamespace
 
+import httpx
 import pytest
+from openai import APIConnectionError, APIStatusError
 
 from src.pipeline import llm
 from src.models import Article
@@ -115,3 +119,83 @@ def test_score_quality_none_on_bad_json(monkeypatch):
     """LLM 输出解析失败返回 None。"""
     monkeypatch.setattr(llm, "_chat_json", lambda *a, **k: "garbage")
     assert llm.score_quality(_make_article()) is None
+
+
+# ── _chat_json 瞬时错误重试 ──────────────────────────────────────────────────
+
+def _fake_response_obj(content: str):
+    """构造带 choices[0].message.content 的响应桩。"""
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+def _fake_client(responses: list):
+    """构造 fake OpenAI client：按顺序消费 responses（异常则抛出）。"""
+    calls = {"n": 0}
+
+    class _Completions:
+        def create(self, **kwargs):
+            calls["n"] += 1
+            item = responses[min(calls["n"], len(responses)) - 1]
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=_Completions())), calls
+
+
+def _conn_error() -> APIConnectionError:
+    """构造连接错误（可重试类）。"""
+    return APIConnectionError(request=httpx.Request("POST", "https://api.deepseek.com/v1/chat/completions"))
+
+
+def _status_error(code: int) -> APIStatusError:
+    """构造指定状态码的 API 错误。"""
+    req = httpx.Request("POST", "https://api.deepseek.com/v1/chat/completions")
+    resp = httpx.Response(code, request=req)
+    return APIStatusError("err", response=resp, body=None)
+
+
+def test_chat_json_retries_transient_then_succeeds(monkeypatch):
+    """瞬时错误（连接失败）后重试成功，返回内容。"""
+    client, calls = _fake_client([_conn_error(), _fake_response_obj('{"ok": true}')])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    monkeypatch.setattr(llm, "_model_id", lambda: "test-model")
+
+    result = llm._chat_json("sys", "user", retries=2)
+    assert result == '{"ok": true}'
+    assert calls["n"] == 2  # 第一次失败 + 一次重试
+
+
+def test_chat_json_retries_429(monkeypatch):
+    """429 限流视为可重试，重试后成功。"""
+    client, calls = _fake_client([_status_error(429), _fake_response_obj('{"ok": true}')])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    monkeypatch.setattr(llm, "_model_id", lambda: "test-model")
+
+    result = llm._chat_json("sys", "user", retries=2)
+    assert result == '{"ok": true}'
+    assert calls["n"] == 2
+
+
+def test_chat_json_no_retry_on_4xx(monkeypatch):
+    """4xx 参数错误不重试，直接返回 None。"""
+    client, calls = _fake_client([_status_error(400)])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    monkeypatch.setattr(llm, "_model_id", lambda: "test-model")
+
+    result = llm._chat_json("sys", "user", retries=2)
+    assert result is None
+    assert calls["n"] == 1  # 未重试
+
+
+def test_chat_json_all_retries_exhausted(monkeypatch):
+    """重试耗尽后返回 None。"""
+    client, calls = _fake_client([_conn_error(), _conn_error(), _conn_error()])
+    monkeypatch.setattr(llm, "_get_client", lambda: client)
+    monkeypatch.setattr(llm, "_model_id", lambda: "test-model")
+
+    result = llm._chat_json("sys", "user", retries=2)
+    assert result is None
+    assert calls["n"] == 3  # 首次 + 2 次重试

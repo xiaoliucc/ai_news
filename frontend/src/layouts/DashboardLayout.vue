@@ -58,7 +58,7 @@ onMounted(() => {
 <style scoped>
 .dash {
   height: 100vh;
-  background: var(--bg);
+  background: var(--canvas, var(--bg));
   color: var(--fg);
   overflow: hidden;
 }

@@ -18,9 +18,15 @@ uv run python -m src.main fetch -s arxiv,hackernews -o markdown -f daily.md
 
 # 启动 Web API 后端（含 AI Agent）
 uv run uvicorn backend.main:app --reload
+
+# 前端（Vue 3 SPA，dev 代理 /api → 8000）
+cd frontend && npm install
+cd frontend && npm run dev        # http://localhost:5173
+cd frontend && npm run typecheck
+cd frontend && npm run build
 ```
 
-访问 `http://127.0.0.1:8000/docs` 查看 Swagger API 文档。
+访问 `http://127.0.0.1:8000/docs` 查看 Swagger API 文档；前端 `http://localhost:5173`。
 
 ## 数据源
 
@@ -50,20 +56,29 @@ uv run uvicorn backend.main:app --reload
 │       ├── papers.py         # HuggingFace Papers 采集
 │       └── rss.py            # 通用 RSS/Atom 聚合（中文源，RSS_FEEDS 配置）
 ├── backend/                  # FastAPI 后端 + AI Agent
-│   ├── main.py              # FastAPI app（lifespan + CORS + 4 路由）
+│   ├── main.py              # FastAPI app（lifespan + CORS + 5 路由）
 │   ├── database.py          # SQLite 数据层（3 表，WAL 模式）
 │   ├── vector_store.py      # ChromaDB 向量索引（语义检索）
 │   ├── scheduler.py         # APScheduler 定时采集
 │   ├── routers/             # REST API 路由
 │   │   ├── articles.py      # GET /api/articles
-│   │   ├── sources.py       # GET /api/sources
+│   │   ├── sources.py       # GET /api/sources + PUT /api/sources/{name}
 │   │   ├── stats.py         # GET /api/stats
-│   │   └── agent.py         # POST /api/agent/chat
+│   │   ├── agent.py         # POST /api/agent/chat
+│   │   └── collect.py       # POST /api/collect（手动采集）
 │   └── agent/               # AI Agent（LLM + tool-use loop）
 │       ├── core.py          # 主循环（最多 5 轮，并发执行工具）
 │       ├── tools.py         # 工具集（search/summarize/analyze_trend）
 │       └── prompts.py       # System prompt
-├── tests/                    # 测试（172 用例，镜像 src/ + backend/）
+├── frontend/                  # Vue 3 SPA（Vite + TS + Element Plus + ECharts）
+│   └── src/
+│       ├── api/             # axios 数据层（5 模块 + http 实例）
+│       ├── stores/          # Pinia（articles/sources/agent，真实 API）
+│       ├── views/           # 5 视图（热榜/文章/趋势/源管理/Agent 对话）
+│       ├── components/      # 7 组件（ArticleCard/MessageBubble 等）
+│       ├── composables/     # useTheme 双主题 + 图表色
+│       └── styles/          # 双主题令牌（cyan 青 / yellow 分栏明暗）+ EP 覆写
+├── tests/                    # 测试（174 用例，镜像 src/ + backend/）
 ├── pyproject.toml            # uv 项目配置
 └── CLAUDE.md                 # Claude Code 项目指南
 ```
@@ -84,6 +99,11 @@ uv run uvicorn backend.main:app --reload
 | 向量存储 | ChromaDB + SentenceTransformer |
 | LLM | OpenAI 兼容端点（默认 DeepSeek v4-flash） |
 | 定时任务 | APScheduler（AsyncIOScheduler） |
+| 前端框架 | Vue 3 + Vite + TypeScript |
+| UI 组件库 | Element Plus（按需引入） |
+| 状态管理 | Pinia |
+| 图表 | ECharts（按需注册） |
+| HTTP 客户端 | axios（前端） |
 | 测试 | pytest + pytest-asyncio |
 
 ## API 端点
@@ -95,6 +115,7 @@ uv run uvicorn backend.main:app --reload
 | `/api/sources/{name}` | PUT | 切换数据源开关 |
 | `/api/stats` | GET | 采集运行统计 + 历史明细 |
 | `/api/agent/chat` | POST | AI Agent 对话（RAG 搜索 + 摘要 + 趋势分析） |
+| `/api/collect` | POST | 手动触发一次全量采集（202 后台执行） |
 | `/health` | GET | 健康检查 |
 
 ## 测试

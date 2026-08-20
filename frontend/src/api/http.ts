@@ -5,7 +5,9 @@
    ============================================================ */
 
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+// ElMessage 手动 deep import（包入口导入会拉全量 element-plus）
+import { ElMessage } from 'element-plus/es/components/message/index'
+import 'element-plus/es/components/message/style/css'
 
 const http = axios.create({
   baseURL: '/api',

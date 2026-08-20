@@ -118,8 +118,39 @@ function onChange(): void {
   text-overflow: ellipsis;
 }
 
-/* 开关槽位固定宽度，防止布局抖动 */
+/* 开关：设计稿样式（example.html）—— 方形滑块 + 细线直角轨道 + 荧光 */
 .sitem :deep(.el-switch) {
+  --el-switch-on-color: var(--accent);
+  --el-switch-off-color: var(--input-bg);
+  height: 16px;
   flex: none;
+}
+.sitem :deep(.el-switch__core) {
+  width: 34px;
+  height: 2px;
+  border: none;
+  border-radius: 0;
+  background: var(--disabled);
+}
+.sitem :deep(.el-switch__core::after) {
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  background: var(--muted);
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+}
+.sitem :deep(.el-switch.is-checked .el-switch__core) {
+  background: var(--accent);
+}
+.sitem :deep(.el-switch.is-checked .el-switch__core::after) {
+  left: 100%;
+  transform: translate(-100%, -50%);
+  background: var(--bg); /* 设计稿 --accent-ink（#0a0e17）与 --bg 同值 */
+}
+/* YELLOW 主题：开启时轨道亮黄微光 */
+[data-theme='yellow'] .sitem :deep(.el-switch.is-checked .el-switch__core) {
+  box-shadow: 0 0 4px rgba(232, 226, 55, 0.4);
 }
 </style>

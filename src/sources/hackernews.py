@@ -71,7 +71,8 @@ class HackerNewsSource(SourcePlugin):
             response.raise_for_status()
             story_data = response.json()
         except (httpx.HTTPError, ValueError) as e:
-            logger.warning("获取HN文章 %s 失败: %s", story_id, e)
+            # 异常可能无消息文本（如超时），%r 显示类型便于诊断
+            logger.warning("获取HN文章 %s 失败: %r", story_id, e)
             return None
 
         return Article(

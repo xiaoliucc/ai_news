@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ElMessage } from 'element-plus'
+// ElMessage 手动 deep import（包入口导入会拉全量 element-plus）
+import { ElMessage } from 'element-plus/es/components/message/index'
+import 'element-plus/es/components/message/style/css'
 import { useAgentStore } from '@/stores/agent'
 import MessageBubble from '@/components/MessageBubble.vue'
 import { useI18n } from '@/utils/i18n'
@@ -43,9 +45,10 @@ function send(): void {
   scrollToBottom()
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
+function onKeydown(e: Event): void {
+  const evt = e as KeyboardEvent
+  if (evt.key === 'Enter' && !evt.shiftKey) {
+    evt.preventDefault()
     send()
   }
 }

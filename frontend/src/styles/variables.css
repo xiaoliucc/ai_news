@@ -82,89 +82,177 @@
 }
 
 /* ============================================================
-   主题 B：近未来科幻工业风（哑黑 + 荧光柠檬黄）
-   三栏结构 / 布局 / 功能逻辑与青色主题完全一致，仅换视觉皮肤
+   主题 B：分栏明暗工业风（顶/右深炭灰 + 左/中浅灰白卡 + 高饱和亮黄）
+   参考配色：
+   顶/右深灰 #26282B~#323539（终端内层 #1C1E20）
+   左/中浅冷灰 #ECEEED + 白色卡片 #FFFFFF
+   强调亮黄 #E8E237（激活/标签/滑块/重点数字/按钮描边）
+   浅区文字 #1F2124 标题 / #55585D 正文 / #9FA2A6 次要
+   深区文字 #E0E2E5 正文 / #C8C9CC 次要
    ============================================================ */
 [data-theme='yellow'] {
-  --bg: oklch(6.5% 0.001 285);
-  --surface: oklch(12.2% 0.001 285);
-  --surface-raised: oklch(16.8% 0.001 285);
-  --surface-hover: oklch(16.8% 0.001 285);
-  --input-bg: oklch(9.8% 0.001 285);
-  --accent: oklch(95.6% 0.2 111);
-  --accent-dim: oklch(88% 0.19 111);
-  --warn: oklch(72% 0.15 45);
-  --blue: oklch(75% 0.09 255);
-  --purple: oklch(75% 0.13 320);
-  --fg: oklch(97.5% 0.002 85);
-  --muted: oklch(76% 0.01 85);
-  --disabled: oklch(42% 0.01 285);
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.22);
-  --accent-06: rgba(234, 255, 0, 0.06);
-  --accent-08: rgba(234, 255, 0, 0.08);
-  --accent-10: rgba(234, 255, 0, 0.1);
-  --accent-18: rgba(234, 255, 0, 0.18);
-  --accent-35: rgba(234, 255, 0, 0.35);
-  --accent-40: rgba(234, 255, 0, 0.4);
-  --accent-ink: oklch(6.5% 0.001 285);
-  --accent-rgb: 234, 255, 0;
+  /* 层级背景：--bg 为深区（顶/右）容器底；浅区（左/中）由下方作用域覆盖 */
+  --bg: #323539;                /* 深炭灰（顶栏/右侧终端） */
+  --canvas: #ECEEED;            /* 浅冷灰画布（body/.dash 背景） */
+  --surface: #323539;           /* 深区面板/卡片 */
+  --surface-raised: #3A3E42;    /* 深区悬浮升阶 */
+  --surface-hover: #3A3E42;     /* 深区悬停 */
+  --surface-active: #2A2D31;    /* 深区按压 */
+  --input-bg: #1C1E20;          /* 深区输入（终端内层色） */
+  /* 功能色：高饱和亮黄（激活态/重点） */
+  --accent: #E8E237;            /* 柠檬亮黄 */
+  --accent-dim: #CBC63A;        /* 激活偏暗 */
+  --accent-mono: #8C881C;       /* 图表暗化版 */
+  --warn: #C77B3A;              /* 低饱和橙 */
+  --blue: #5B7FA6;              /* 低饱和蓝 */
+  --purple: #9B8FD6;            /* 低饱和紫 */
+  /* 文字：深区浅色系（置于深炭灰面板上） */
+  --fg: #E0E2E5;                /* 深区主标题 */
+  --muted: #C8C9CC;             /* 深区正文 */
+  --disabled: #9FA2A6;          /* 深区次要 */
+  /* 结构：细描边（深炭灰面板上的浅线） */
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --keyline: 2px solid var(--accent);
+  /* 强调色透明度派生 */
+  --accent-rgb: 232, 226, 55;
+  --accent-06: rgba(232, 226, 55, 0.06);
+  --accent-08: rgba(232, 226, 55, 0.08);
+  --accent-10: rgba(232, 226, 55, 0.1);
+  --accent-18: rgba(232, 226, 55, 0.18);
+  --accent-35: rgba(232, 226, 55, 0.35);
+  --accent-40: rgba(232, 226, 55, 0.4);
+  /* 亮黄上的文字：深炭墨（非纯黑 #000，参考图黄色块内黑字） */
+  --accent-ink: #1F2124;
 }
-/* 哑光吸光材质底 + 细网格网点 */
+/* ============ 浅色区（左侧栏 / 中间主区）作用域变量覆盖 ============
+   左栏 .spanel 与中间 .aview/.tview/.hview 为浅冷灰画布 + 白卡，
+   在此作用域内覆盖 --fg/--muted/--surface 等，使组件自动切换为深色文字/白卡 */
+[data-theme='yellow'] .spanel,
+[data-theme='yellow'] .aview,
+[data-theme='yellow'] .tview,
+[data-theme='yellow'] .hview {
+  --bg: #ECEEED;                /* 浅冷灰容器底 */
+  --surface: #FFFFFF;           /* 白色卡片 */
+  --surface-raised: #F4F5F6;    /* 浅区悬浮 */
+  --surface-hover: #EFF1F2;     /* 浅区悬停 */
+  --surface-active: #E6E8EA;    /* 浅区按压 */
+  --input-bg: #323539;          /* 筛选下拉/输入：深灰底白字（参考图） */
+  --fg: #1F2124;                /* 浅区标题：深黑灰 */
+  --muted: #55585D;             /* 浅区正文：中度冷灰 */
+  --disabled: #9FA2A6;          /* 浅区次要：中性浅灰 */
+  --border: rgba(31, 33, 36, 0.12);   /* 浅底细描边 */
+  --border-strong: rgba(31, 33, 36, 0.2);
+  /* 输入控件文字保持浅色（深灰底白字） */
+  --el-input-text-color: #E0E2E5;
+  --el-input-placeholder-color: #9FA2A6;
+  --el-select-input-color: #E0E2E5;
+  --el-select-close-hover-color: #E8E237;
+}
+/* 浅色区内 EP 输入控件：文字强制浅色（覆盖 endfield 的 var(--fg) 映射） */
+[data-theme='yellow'] .spanel .el-input__inner,
+[data-theme='yellow'] .aview .el-input__inner,
+[data-theme='yellow'] .tview .el-input__inner,
+[data-theme='yellow'] .hview .el-input__inner,
+[data-theme='yellow'] .spanel .el-textarea__inner,
+[data-theme='yellow'] .aview .el-textarea__inner,
+[data-theme='yellow'] .tview .el-textarea__inner,
+[data-theme='yellow'] .hview .el-textarea__inner,
+[data-theme='yellow'] .spanel .el-select__selected-item,
+[data-theme='yellow'] .aview .el-select__selected-item,
+[data-theme='yellow'] .tview .el-select__selected-item,
+[data-theme='yellow'] .hview .el-select__selected-item {
+  color: #E0E2E5;
+}
+/* 浅色区 select 多选折叠标签：白字（深灰标签底） */
+[data-theme='yellow'] .spanel .el-select__tags .el-tag,
+[data-theme='yellow'] .aview .el-select__tags .el-tag,
+[data-theme='yellow'] .tview .el-select__tags .el-tag,
+[data-theme='yellow'] .hview .el-select__tags .el-tag {
+  background: #3A3E42;
+  border-color: rgba(232, 226, 55, 0.3);
+  color: #E0E2E5;
+}
+/* 画布：浅冷灰 + 极淡灰网格纹理 */
+[data-theme='yellow'] html {
+  background-color: #E2E4E6;
+}
 [data-theme='yellow'] body {
-  background-color: var(--bg);
+  background-color: var(--canvas);
   background-image:
-    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(234, 255, 0, 0.025), transparent 60%),
-    linear-gradient(rgba(234, 255, 0, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(234, 255, 0, 0.02) 1px, transparent 1px);
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(31, 33, 36, 0.04), transparent 60%),
+    linear-gradient(rgba(31, 33, 36, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 33, 36, 0.03) 1px, transparent 1px);
   background-size: 100% 100%, 44px 44px, 44px 44px;
   position: relative;
 }
-/* 低对比度数字颗粒噪点 */
+/* 极淡数字颗粒噪点 */
 [data-theme='yellow'] body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.6;
+  opacity: 0.3;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.045'/></svg>");
 }
-/* 极淡屏幕扫描线 */
+/* 移除原荧光扫描线 */
 [data-theme='yellow'] body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.018) 0 1px,
-    transparent 1px 3px
-  );
+  content: none;
 }
+/* 布局：深/浅面板浮于浅灰画布，面板间留 6px 缝隙 */
 [data-theme='yellow'] .layout {
   position: relative;
   z-index: 1;
 }
-[data-theme='yellow'] ::-webkit-scrollbar-thumb {
-  background: #3d3b44;
+[data-theme='yellow'] .dash {
+  gap: 6px;
+  padding: 6px;
+  background: var(--canvas);
 }
-/* 半透明磨砂面板 */
+[data-theme='yellow'] .dash__body {
+  gap: 6px;
+}
+[data-theme='yellow'] .dash__topbar {
+  background: #2B2E32;          /* 顶栏深灰 */
+  border-bottom: none;
+}
+[data-theme='yellow'] .dash__aside {
+  background: #ECEEED;          /* 左栏浅冷灰 */
+  border-right: none;
+}
+[data-theme='yellow'] .dash__main {
+  background: #ECEEED;          /* 中间浅冷灰 */
+}
+[data-theme='yellow'] .dash__panel.is-open {
+  background: #323539;          /* 右终端深灰 */
+  border-left: none;
+}
+[data-theme='yellow'] ::-webkit-scrollbar-thumb {
+  background: #55585F;
+}
+/* 面板/卡片：浅区（左/中）白卡由作用域变量生效，此处不再硬编码 */
 [data-theme='yellow'] .acard,
 [data-theme='yellow'] .sitem,
 [data-theme='yellow'] .stat,
-[data-theme='yellow'] .tcard,
+[data-theme='yellow'] .tcard {
+  background-color: var(--surface);
+  box-shadow: 0 1px 3px rgba(31, 33, 36, 0.08), inset 0 0 0 1px var(--border);
+}
+/* 输入类控件：深灰底 + 细描边，focus 亮黄描边 */
 [data-theme='yellow'] .el-input__wrapper,
 [data-theme='yellow'] .el-textarea__inner,
-[data-theme='yellow'] .el-select__wrapper,
-[data-theme='yellow'] .el-select-dropdown,
-[data-theme='yellow'] .el-popper.is-light,
-[data-theme='yellow'] .el-message,
-[data-theme='yellow'] .el-skeleton__item {
-  background-color: rgba(22, 22, 28, 0.96); /* 半透明实色磨砂（无 backdrop-filter，规避 Chromium 最小化 GPU 冻结） */
+[data-theme='yellow'] .el-select__wrapper {
+  background-color: var(--input-bg);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
-/* 侧边栏/功能按钮：半透明白色磨砂玻璃 + 微距下沉投影 */
+[data-theme='yellow'] .el-input__wrapper.is-focus,
+[data-theme='yellow'] .el-textarea__inner:focus,
+[data-theme='yellow'] .el-select__wrapper.is-focused {
+  background-color: #3A3E42;
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+/* 侧边栏/功能按钮：半透明白磨砂 + 微距下沉投影 */
 [data-theme='yellow'] .el-button,
 [data-theme='yellow'] .vbtn,
 [data-theme='yellow'] .abtn,
@@ -172,61 +260,54 @@
 [data-theme='yellow'] .pager__btn,
 [data-theme='yellow'] .topbar__icon-btn,
 [data-theme='yellow'] .spanel__icon {
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(31, 33, 36, 0.06);
+  box-shadow: 0 2px 8px rgba(31, 33, 36, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 [data-theme='yellow'] .sitem {
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1px 3px rgba(31, 33, 36, 0.08);
 }
-/* 中央信息卡片：微透视倾斜 + 银灰金属高光描边 */
+/* 中央信息卡片：白卡 + 细描边（浅区） */
 [data-theme='yellow'] .acard,
 [data-theme='yellow'] .tcard {
-  border: 1px solid rgba(208, 214, 228, 0.26);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 18px rgba(234, 255, 0, 0.045);
-}
-[data-theme='yellow'] .acard {
-  transform: perspective(1100px) rotateX(0.8deg);
-  transform-origin: top center;
-}
-[data-theme='yellow'] .tcard {
-  transform: perspective(1200px) rotateX(0.6deg);
-  transform-origin: top center;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(31, 33, 36, 0.08);
 }
 [data-theme='yellow'] .acard:hover,
 [data-theme='yellow'] .sitem:hover {
   border-color: var(--accent-35);
   background-color: var(--surface-raised);
 }
-/* 局部自发光边缘晕影 */
+/* 局部高亮：亮黄细线/描边（激活态，克制） */
 [data-theme='yellow'] .acard__corner {
   border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(234, 255, 0, 0.75);
+  box-shadow: 0 0 4px rgba(232, 226, 55, 0.4);
 }
 [data-theme='yellow'] .sitem__dot.is-on,
 [data-theme='yellow'] .topbar__state-dot.is-ok,
 [data-theme='yellow'] .state__dot.is-ok {
-  box-shadow: 0 0 7px rgba(234, 255, 0, 0.8);
+  box-shadow: 0 0 4px rgba(232, 226, 55, 0.5);
 }
 [data-theme='yellow'] .vbtn.is-active,
 [data-theme='yellow'] .aview__view-btn.is-active {
-  box-shadow: 0 0 16px rgba(234, 255, 0, 0.35), inset 0 0 8px rgba(234, 255, 0, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(232, 226, 55, 0.4);
 }
-/* AI 解读按钮：荧光黄描边 + 悬停发光填充 */
+/* AI 解读按钮：亮黄描边 + 悬停填充 */
 [data-theme='yellow'] .acard__ai {
   border-color: var(--accent);
-  background: rgba(234, 255, 0, 0.08);
-  box-shadow: 0 0 10px rgba(234, 255, 0, 0.18);
+  color: var(--accent);
+  background: rgba(232, 226, 55, 0.08);
+  box-shadow: 0 0 4px rgba(232, 226, 55, 0.12);
 }
 [data-theme='yellow'] .acard__ai:hover {
   background: var(--accent);
-  box-shadow: 0 0 18px rgba(234, 255, 0, 0.45);
+  color: var(--accent-ink);
+  box-shadow: 0 0 8px rgba(232, 226, 55, 0.3);
 }
-/* 手动采集按钮：荧光黄描边斜切 */
+/* 手动采集按钮：亮黄描边 */
 [data-theme='yellow'] .shead__collect {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(234, 255, 0, 0.08);
+  background: rgba(232, 226, 55, 0.08);
 }
 [data-theme='yellow'] .shead__collect:hover {
   background: var(--accent);
@@ -234,16 +315,18 @@
 }
 [data-theme='yellow'] .el-button--primary,
 [data-theme='yellow'] .asend {
-  box-shadow: 0 0 18px rgba(234, 255, 0, 0.28);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 0 8px rgba(232, 226, 55, 0.25);
 }
 [data-theme='yellow'] .el-switch.is-checked .el-switch__core {
-  box-shadow: 0 0 8px rgba(234, 255, 0, 0.55);
+  box-shadow: 0 0 4px rgba(232, 226, 55, 0.4);
 }
-/* 顶栏与面板头部：金属磨砂 + 荧光微光 */
+/* 顶栏：深灰面板 + 底部亮黄细线 */
 [data-theme='yellow'] .topbar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  border-bottom: 1px solid rgba(234, 255, 0, 0.16);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, #3A3E42, #2B2E32);
+  border-bottom: 1px solid rgba(232, 226, 55, 0.25);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   position: relative;
 }
 [data-theme='yellow'] .topbar::after {
@@ -253,7 +336,7 @@
   right: 0;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(234, 255, 0, 0.55), transparent);
+  background: linear-gradient(90deg, transparent, rgba(232, 226, 55, 0.45), transparent);
   pointer-events: none;
 }
 [data-theme='yellow'] .shead,
@@ -261,36 +344,29 @@
 [data-theme='yellow'] .mtool,
 [data-theme='yellow'] .hcol__head,
 [data-theme='yellow'] .tcard__head {
-  border-bottom-color: rgba(234, 255, 0, 0.12);
+  border-bottom-color: var(--border);
 }
-[data-theme='yellow'] .shead__title,
-[data-theme='yellow'] .ahead__title,
-[data-theme='yellow'] .hcol__title,
-[data-theme='yellow'] .tcard__title {
-  text-shadow: 0 0 12px rgba(234, 255, 0, 0.28);
-}
-/* 分组标题：荧光黄标签文字 */
+/* 分组标题：亮黄标签文字（无辉光） */
 [data-theme='yellow'] .spanel__group-title,
 [data-theme='yellow'] .gtitle {
   color: var(--accent);
-  text-shadow: 0 0 10px rgba(234, 255, 0, 0.3);
   letter-spacing: 4px;
 }
-/* 消息气泡磨砂 */
+/* 消息气泡磨砂（右终端深区） */
 [data-theme='yellow'] .bubble.is-user .bubble__body {
-  background: rgba(30, 30, 38, 0.92);
+  background: #3A3E42;
   border-left-color: var(--accent);
 }
 [data-theme='yellow'] .bubble.is-ai .bubble__body {
-  background: rgba(22, 22, 28, 0.92);
+  background: #26282B;
 }
-/* 警告条/提示：荧光描边 */
+/* 警告条/提示：亮黄描边 */
 [data-theme='yellow'] .spanel__warn,
 [data-theme='yellow'] .swarn,
 [data-theme='yellow'] .hint,
 [data-theme='yellow'] .aview__hint {
   border-left-color: var(--accent);
-  background: rgba(234, 255, 0, 0.05);
+  background: rgba(232, 226, 55, 0.05);
 }
 [data-theme='yellow'] .swarn__text {
   color: var(--fg);
@@ -298,37 +374,74 @@
 [data-theme='yellow'] .hint__icon,
 [data-theme='yellow'] .aview__hint-icon {
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(234, 255, 0, 0.7);
 }
-/* 文章标签：荧光黄 + 辉光 */
+/* 文章标签：亮黄细描边文字（浅区白卡上，非填充） */
 [data-theme='yellow'] .acard__tag,
 [data-theme='yellow'] .el-tag {
   color: var(--accent);
-  border-color: rgba(234, 255, 0, 0.3);
-  text-shadow: 0 0 8px rgba(234, 255, 0, 0.35);
+  border-color: rgba(232, 226, 55, 0.35);
+  background: rgba(232, 226, 55, 0.07);
 }
-/* 统计块：磨砂 + 荧光描边 */
+/* 统计块：白卡 + 亮黄左条（浅区） */
 [data-theme='yellow'] .stat {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface);
   border-left-color: var(--accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 3px rgba(31, 33, 36, 0.08);
 }
 [data-theme='yellow'] .stat__value.is-accent {
-  text-shadow: 0 0 10px rgba(234, 255, 0, 0.45);
+  color: var(--accent);
 }
-/* 弹层磨砂深底 */
+/* 弹层磨砂深底（浮层恒深色保证可读） */
 [data-theme='yellow'] .el-select-dropdown,
 [data-theme='yellow'] .el-popper.is-light {
-  background: rgba(17, 17, 22, 0.98);
-  border-color: rgba(234, 255, 0, 0.22);
+  background: #323539;
+  border-color: rgba(232, 226, 55, 0.2);
 }
 [data-theme='yellow'] .el-dropdown-menu__item:hover {
   color: var(--accent);
 }
-/* 空状态荧光角标 */
+/* 空状态亮黄角标 */
 [data-theme='yellow'] .empty__mark::after {
   background: var(--accent);
-  box-shadow: 0 0 10px rgba(234, 255, 0, 0.7);
+}
+/* ============ 视图切换 tab（文章/趋势/热榜）修复 ============
+   原实现：矩形容器 + 独立平行四边形指示块 → 斜块盖不满直角矩形角，露出深色三角。
+   改为：每个按钮自带斜切背景（选中亮黄 / 未选中深灰），斜边互相咬合无缝；
+   隐藏独立指示块（其 left/width 由组件 JS 计算，display:none 不影响逻辑）。 */
+[data-theme='yellow'] html .aview__views {
+  background: transparent;
+}
+[data-theme='yellow'] html .aview__views-indicator {
+  display: none;
+}
+[data-theme='yellow'] html .aview__view-btn {
+  background: #323539;                    /* 未选中：深炭灰 */
+  border-color: rgba(255, 255, 255, 0.12); /* 斜边细分割线（浅色，参考图） */
+}
+[data-theme='yellow'] html .aview__view-btn:first-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+[data-theme='yellow'] html .aview__view-btn:hover {
+  background: #3A3E42;                    /* 悬停微亮 */
+  color: #E0E2E5;
+}
+[data-theme='yellow'] html .aview__view-btn.is-active {
+  background: var(--accent);              /* 选中：亮黄填充 */
+  border-color: transparent;
+  color: var(--accent-ink);               /* 黑字（参考图） */
+}
+/* 弹层磨砂深底 */
+[data-theme='yellow'] .el-select-dropdown,
+[data-theme='yellow'] .el-popper.is-light {
+  background: #3E4148;
+  border-color: rgba(232, 226, 55, 0.2);
+}
+[data-theme='yellow'] .el-dropdown-menu__item:hover {
+  color: var(--accent);
+}
+/* 空状态芥末黄角标 */
+[data-theme='yellow'] .empty__mark::after {
+  background: var(--accent);
 }
 
 /* ============================================================
@@ -347,7 +460,7 @@ body,
   height: 100%;
 }
 body {
-  background: var(--bg);
+  background: var(--canvas, var(--bg));
   color: var(--fg);
   font-family: var(--font-body);
   font-size: 13px;

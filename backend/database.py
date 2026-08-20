@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS user_profile (
     interests       TEXT NOT NULL DEFAULT '[]',
     reading_history TEXT NOT NULL DEFAULT '[]',
     selected_sources TEXT NOT NULL DEFAULT '[]',
+    conversation_summary TEXT NOT NULL DEFAULT '',
+    conversation_updated_at TEXT,
     language        TEXT NOT NULL DEFAULT 'zh',
     updated_at      TEXT NOT NULL
 );
@@ -50,7 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
 
 
 def _migrate_user_profile(conn: sqlite3.Connection) -> None:
-    """为已存在的 user_profile 表补 selected_sources 列。
+    """为已存在的 user_profile 表补 selected_sources / conversation_summary 列。
 
     旧库的 user_profile 表在 SCHEMA 增加该列之前创建，CREATE TABLE IF NOT EXISTS
     不会补列，需用 ALTER TABLE 迁移，否则 get_profile 会因列不存在报错。
@@ -68,6 +70,16 @@ def _migrate_user_profile(conn: sqlite3.Connection) -> None:
             "ADD COLUMN selected_sources TEXT NOT NULL DEFAULT '[]'"
         )
         logger.info("Migrated user_profile: added selected_sources column")
+    if "conversation_summary" not in columns:
+        conn.execute(
+            "ALTER TABLE user_profile "
+            "ADD COLUMN conversation_summary TEXT NOT NULL DEFAULT ''"
+        )
+        conn.execute(
+            "ALTER TABLE user_profile "
+            "ADD COLUMN conversation_updated_at TEXT"
+        )
+        logger.info("Migrated user_profile: added conversation_summary column")
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -253,12 +265,15 @@ def get_profile() -> dict:
             result[field] = json.loads(result[field])
         except (json.JSONDecodeError, TypeError):
             result[field] = []
+    # conversation_summary 为纯文本（非 JSON），旧库迁移后可能缺省
+    result.setdefault("conversation_summary", "")
     return result
 
 def set_profile(
         interests: list[str] | None = None,
         reading_history: list[str] | None = None,
         selected_sources: list[str] | None = None,
+        conversation_summary: str | None = None,
         language: str | None = None,
 ) -> None:
     """部分更新用户画像，只更新传入的非 None 字段。
@@ -267,6 +282,7 @@ def set_profile(
         interests: 用户关注方向列表。
         reading_history: 阅读历史文章 ID 列表（全量覆盖）。
         selected_sources: 启用的数据源列表；空列表表示全选（全量覆盖）。
+        conversation_summary: 跨会话对话摘要（P2 记忆，全量覆盖）。
         language: 回复语言（zh / en）。
     """
     logger.debug("Updating user profile...")
@@ -281,6 +297,11 @@ def set_profile(
     if selected_sources is not None:
         updates.append("selected_sources = ?")
         params.append(json.dumps(selected_sources))
+    if conversation_summary is not None:
+        updates.append("conversation_summary = ?")
+        updates.append("conversation_updated_at = ?")
+        params.append(conversation_summary)
+        params.append(datetime.now(timezone.utc).isoformat())
     if language is not None:
         updates.append("language = ?")
         params.append(language)

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ElMessage } from 'element-plus'
+// ElMessage 手动 deep import（包入口导入会拉全量 element-plus）
+import { ElMessage } from 'element-plus/es/components/message/index'
+import 'element-plus/es/components/message/style/css'
 import { useSourcesStore } from '@/stores/sources'
 import { useLayoutStore } from '@/stores/layout'
 import SourceItem from '@/components/SourceItem.vue'
@@ -49,7 +51,7 @@ async function onCollect(): Promise<void> {
         <el-button
           size="small"
           :loading="collecting"
-          class="spanel__collect ef-btn-outline"
+          class="spanel__collect"
           data-od-id="collect-btn"
           @click="onCollect"
         >
@@ -165,6 +167,38 @@ async function onCollect(): Promise<void> {
 }
 .spanel__collect {
   margin-left: auto;
+}
+/* 采集按钮：主题色填充背景（cyan=青 / yellow=黄），斜切轮廓，文字用深墨色
+   注意：必须用长写属性覆盖 endfield-theme.css 的 .el-button 全局简写（background: transparent） */
+.spanel__collect.el-button {
+  --el-button-bg-color: var(--accent);
+  --el-button-border-color: var(--accent);
+  --el-button-text-color: var(--bg);
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.spanel__collect.el-button:hover,
+.spanel__collect.el-button:focus-visible {
+  --el-button-hover-bg-color: var(--accent-dim);
+  --el-button-hover-border-color: var(--accent-dim);
+  --el-button-hover-text-color: var(--bg);
+  background-color: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--bg);
+}
+.spanel__collect.el-button:active {
+  background-color: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--bg);
+}
+.spanel__collect.el-button.is-loading,
+.spanel__collect.el-button.is-loading:hover {
+  background-color: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--bg);
+  opacity: 0.85;
 }
 .spanel__icon {
   width: 26px;

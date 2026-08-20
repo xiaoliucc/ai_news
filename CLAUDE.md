@@ -21,6 +21,9 @@ uv run pytest -k "dedup"
 uv run pytest -m unit
 uv run pytest -m "not integration"
 
+# Frontend tests (Vitest, tests/frontend/ mirrors frontend/src)
+cd frontend && npm test
+
 # CLI: fetch AI news from all sources
 uv run python -m src.main fetch --limit 20
 
@@ -29,6 +32,12 @@ uv run python -m src.main fetch -s arxiv,hackernews -o markdown -f daily.md
 
 # Start the FastAPI backend (with hot reload)
 uv run uvicorn backend.main:app --reload
+
+# Frontend: install deps, dev server, typecheck, build
+cd frontend && npm install
+cd frontend && npm run dev        # http://localhost:5173, /api proxied to :8000
+cd frontend && npm run typecheck
+cd frontend && npm run build
 ```
 
 ## Architecture
@@ -48,6 +57,8 @@ Web API (backend/main.py) ┘
 **`src/`** — The headless data pipeline: data model, source plugins, engine, ranking, LLM integration, CLI entry point. No web awareness.
 
 **`backend/`** — FastAPI layer: REST API, SQLite storage, APScheduler for periodic collection, and the AI Agent (LLM + tool-use loop). Depends on `src/` for the engine and models.
+
+**`frontend/`** — Vue 3.5 SPA (Vite + TS + Element Plus + Pinia + vue-echarts), ported from the OpenDesign `endfield-ai-intel-dashboard` design project. Three-pane dashboard (sources sidebar / main articles-trends-hotlist / agent chat). Talks to the backend through an axios layer (`src/api/`) — dev proxy `/api` → `http://localhost:8000`.
 
 ### Core data flow
 
@@ -79,7 +90,7 @@ Three SQLite tables: `articles` (INSERT OR REPLACE by id), `collection_runs` (lo
 
 ### Scheduler (`backend/scheduler.py`)
 
-APScheduler `AsyncIOScheduler` with interval job. `start()` is idempotent — fires an immediate collection on startup via `asyncio.ensure_future`, then repeats every `COLLECTION_HOURS` (default 6h, from `.env`). `collect_once()` pipeline: instantiate sources per `user_profile.selected_sources` (empty = all, via `SOURCE_REGISTRY`) → engine.run() → `_filter_ai_related()` (LLM semantic AI-relevance filter, 4-thread concurrent, falls back to keyword matching when LLM unavailable) → save_articles (SQLite) → add_articles (ChromaDB). `_collect_lock` (asyncio.Lock) prevents concurrent collection. Source toggles via `PUT /api/sources/{name}` only affect the scheduler (CLI unaffected).
+APScheduler `AsyncIOScheduler` with interval job. `start()` is idempotent — fires an immediate collection on startup via `asyncio.ensure_future`, then repeats every `COLLECTION_HOURS` (default 6h, from `.env`). `collect_once()` pipeline: instantiate sources per `user_profile.selected_sources` (empty = all, via `SOURCE_REGISTRY`) → engine.run() → `_filter_ai_related()` (LLM semantic AI-relevance filter, 4-thread concurrent, falls back to keyword matching when LLM unavailable) → save_articles (SQLite) → add_articles (ChromaDB). `_collect_lock` (asyncio.Lock) prevents concurrent collection. Source toggles via `PUT /api/sources/{name}` only affect the scheduler (CLI unaffected). Manual trigger: `POST /api/collect` (202 + background task) and the Agent's `trigger_collection` tool both call `collect_once()`.
 
 ## Key conventions
 
@@ -88,11 +99,12 @@ APScheduler `AsyncIOScheduler` with interval job. `start()` is idempotent — fi
 - **Docstrings are Google style**: `Args:` / `Returns:` / `Raises:` sections.
 - **Logging, not print**: Use `logging` (stderr) for diagnostics; stdout is reserved for CLI output that may be piped.
 - **`_chat_json` is the LLM call facade**: All LLM calls go through `src/pipeline/llm._chat_json(system_prompt, user_content, max_tokens) → str | None` with JSON mode and temperature=0.
+- **Frontend conventions**: Element Plus and ECharts are on-demand (unplugin-vue-components/AutoImport + `echarts/core` use()); `ElMessage` must be imported deep (`element-plus/es/components/message/index` + style/css) — the package entry pulls the full bundle. `endfield-theme.css`'s global `.el-button { background: transparent }` shorthand overrides EP CSS variables — override buttons with scoped longhand properties. Types in `src/types/index.ts` mirror backend JSON shapes (source category is English enum `tech_community`/`academic`/`chinese_media`; `collection_runs` uses `total_articles`/`source_stats`). Agent chat returns a single `{answer}` (non-streaming) — the frontend replays it with a local streaming simulator.
 
 ## Current project phase
 
-Phases 0-4 complete; Phase 5 batch 1 (quality optimization + memory P1) + batch 2 (source toggles + RSS aggregation) complete. `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Next: batch 3 (frontend). Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`.
+Phases 0-4 complete; Phase 5 all three batches complete (quality + memory P1, source toggles + RSS, frontend integration + optimization). `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Frontend live at `frontend/` (Vue 3 SPA, real API). Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`. Next candidates: deployment (Docker / GitHub Actions), memory P2, more Chinese sources.
 
 ## Test structure
 
-Tests mirror the source tree under `tests/` — `tests/src/sources/test_hackernews.py` tests `src/sources/hackernews.py`, `tests/backend/routers/test_sources.py` tests `backend/routers/sources.py`. 172 total cases (164 unit + 8 integration).
+Tests mirror the source tree under `tests/` — `tests/src/sources/test_hackernews.py` tests `src/sources/hackernews.py`, `tests/backend/routers/test_sources.py` tests `backend/routers/sources.py`. 174 total cases (166 unit + 8 integration).

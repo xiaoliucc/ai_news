@@ -415,3 +415,50 @@ def test_migrate_adds_selected_sources_column(monkeypatch, tmp_db):
     # 迁移后 get_profile 正常返回默认值
     p = get_profile()
     assert p["selected_sources"] == []
+
+
+def test_migrate_adds_conversation_summary_column(monkeypatch, tmp_db):
+    """旧库（无 conversation_summary 列）init_db 后自动补列。"""
+    import sqlite3 as _sqlite3
+    from backend.config import SQLITE_PATH as db_path
+
+    # 用旧 schema 重建表（去掉 conversation_summary / conversation_updated_at 列）
+    conn = _sqlite3.connect(str(db_path))
+    conn.execute("DROP TABLE user_profile")
+    conn.execute(
+        """CREATE TABLE user_profile (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            interests TEXT NOT NULL DEFAULT '[]',
+            reading_history TEXT NOT NULL DEFAULT '[]',
+            selected_sources TEXT NOT NULL DEFAULT '[]',
+            language TEXT NOT NULL DEFAULT 'zh',
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    conn.commit()
+    conn.close()
+
+    # 再次 init_db 触发迁移
+    init_db()
+
+    conn = _sqlite3.connect(str(db_path))
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(user_profile)").fetchall()}
+    conn.close()
+    assert "conversation_summary" in cols
+    assert "conversation_updated_at" in cols
+
+    # 迁移后 get_profile 默认空摘要
+    p = get_profile()
+    assert p["conversation_summary"] == ""
+
+
+def test_set_profile_conversation_summary_persists(tmp_db):
+    """set_profile 写入摘要后 get_profile 可读回（含更新时间）。"""
+    set_profile(conversation_summary="用户关注推理效率，已推荐 3 篇论文。")
+    p = get_profile()
+    assert p["conversation_summary"] == "用户关注推理效率，已推荐 3 篇论文。"
+    assert p["conversation_updated_at"] is not None
+
+    # 覆盖写入
+    set_profile(conversation_summary="新摘要")
+    assert get_profile()["conversation_summary"] == "新摘要"

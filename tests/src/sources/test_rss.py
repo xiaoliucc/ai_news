@@ -4,11 +4,15 @@
 覆盖：
     - _parse_feed 单元测试（纯函数，无网络）：RSS 2.0 / Atom / 空 / 畸形 / 去重
     - fetch 无 feed 配置返回空
+    - _backoff_active 退避判定（官方免费 RSS 60 分钟/次限制）
 """
 
+import time
+
+import httpx
 import pytest
 
-from src.sources.rss import RSSSource
+from src.sources.rss import RSSSource, _backoff_active
 
 
 # ── fixture XML ──────────────────────────────────────────────────────────────
@@ -107,6 +111,95 @@ async def test_fetch_no_feeds_returns_empty():
     """未配置 feed 时返回空。"""
     source = RSSSource(feeds=[])
     assert await source.fetch(limit=10) == []
+
+
+# ── 退避（官方免费 RSS：最多每 60 分钟请求一次） ──────────────────────────────
+
+def test_backoff_active_within_interval():
+    """距上次请求不足 min_interval 时处于退避期。"""
+    now = time.monotonic()
+    assert _backoff_active(now, now - 300, 3600) is True  # 5 分钟前
+    assert _backoff_active(now, now, 3600) is True  # 刚刚请求过
+
+
+def test_backoff_inactive_after_interval():
+    """超过 min_interval 后退出退避期。"""
+    now = time.monotonic()
+    assert _backoff_active(now, now - 3601, 3600) is False
+
+
+def test_backoff_disabled_or_never_requested():
+    """min_interval<=0 或从未请求过时不退避。"""
+    now = time.monotonic()
+    assert _backoff_active(now, None, 3600) is False  # 从未请求
+    assert _backoff_active(now, now - 10, 0) is False  # 禁用退避
+    assert _backoff_active(now, None, 0) is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_skips_within_backoff(monkeypatch):
+    """退避期内 fetch 不发起网络请求，直接返回空。"""
+    from src.sources import rss as rss_module
+
+    monkeypatch.setattr(rss_module, "_last_request_ts", time.monotonic())
+
+    called = False
+
+    async def fake_request(*args, **kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(rss_module.httpx.AsyncClient, "__aenter__", fake_request)
+
+    source = RSSSource(feeds=["https://feed.invalid/x"], min_interval=3600)
+    result = await source.fetch(limit=10)
+    assert result == []
+    assert called is False  # 未触碰网络
+
+
+@pytest.mark.asyncio
+async def test_fetch_skips_within_429_cooldown(monkeypatch):
+    """429 冷却期内 fetch 直接跳过（额度耗尽后避免白碰壁）。"""
+    from src.sources import rss as rss_module
+
+    monkeypatch.setattr(rss_module, "_last_429_ts", time.monotonic())
+
+    called = False
+
+    async def fake_request(*args, **kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr(rss_module.httpx.AsyncClient, "__aenter__", fake_request)
+
+    source = RSSSource(feeds=["https://feed.invalid/x"], min_interval=0)
+    result = await source.fetch(limit=10)
+    assert result == []
+    assert called is False  # 未触碰网络
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_429_sets_cooldown(monkeypatch):
+    """_fetch_feed 收到 429 时记录冷却时间（跨实例共享）。"""
+    from src.sources import rss as rss_module
+
+    monkeypatch.setattr(rss_module, "_last_429_ts", None)
+
+    class FakeResponse:
+        status_code = 429
+
+    class FakeClient:
+        async def get(self, url):
+            raise httpx.HTTPStatusError(
+                "429 Too Many Requests", request=httpx.Request("GET", url), response=FakeResponse()
+            )
+
+    source = RSSSource(feeds=["https://feed.invalid/x"], min_interval=0)
+    result = await source._fetch_feed(FakeClient(), "https://feed.invalid/x", 10)
+    assert result == []
+    assert rss_module._last_429_ts is not None  # 已进入冷却
 
 
 @pytest.mark.integration

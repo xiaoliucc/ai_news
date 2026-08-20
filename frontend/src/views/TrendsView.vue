@@ -53,12 +53,14 @@ const trendChartOption = computed(() => {
     const data: Array<[string, number]> = []
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(now - i * 24 * 3600_000)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      // key 必须与 xAxis.data（trendChartDates，M/D 格式）完全一致，
+      // 否则 ECharts category 轴无法定位数据点，折线不显示
+      const key = `${d.getMonth() + 1}/${d.getDate()}`
       const count = articlesStore.articles.filter((a) => {
         const ts = Date.parse(a.published_at ?? '')
         if (!ts || ts < now - n * 24 * 3600_000) return false
         const dd = new Date(ts)
-        const k = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`
+        const k = `${dd.getMonth() + 1}/${dd.getDate()}`
         return k === key && a.source === s.name
       }).length
       data.push([key, count])

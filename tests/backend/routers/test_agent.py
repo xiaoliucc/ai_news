@@ -56,7 +56,7 @@ def test_agent_chat_history_content_too_long():
 def test_agent_chat_with_history_and_interests():
     """传递 history 和 interests 给 chat"""
     with patch("backend.routers.agent.chat") as mock_chat, \
-         patch("backend.routers.agent.get_profile"):
+         patch("backend.routers.agent.get_profile", return_value={"interests": [], "conversation_summary": ""}):
         mock_chat.return_value = "OK"
 
         history = [{"role": "user", "content": "你好"}, {"role": "assistant", "content": "你好！"}]
@@ -71,6 +71,80 @@ def test_agent_chat_with_history_and_interests():
             history=history,
             interests=["多模态", "RAG"],
             reading_history=None,
+            conversation_summary=None,
+        )
+
+
+def test_agent_chat_archives_long_history():
+    """history 超过阈值时：旧轮次压缩进摘要存库，chat 只收到最近 KEEP_MESSAGES 条"""
+    with patch("backend.routers.agent.chat") as mock_chat, \
+         patch("backend.routers.agent.get_profile") as mock_profile, \
+         patch("backend.routers.agent.summarize_conversation") as mock_summarize, \
+         patch("backend.routers.agent.set_profile") as mock_set_profile:
+        mock_chat.return_value = "OK"
+        mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
+        mock_summarize.return_value = "合并后的新摘要"
+
+        history = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"msg{i}"} for i in range(13)]
+        resp = client.post("/api/agent/chat", json={"message": "继续", "history": history})
+        assert resp.status_code == 200
+
+        # 归档调用：旧摘要 + 最早 1 条消息 → 新摘要
+        mock_summarize.assert_called_once_with("旧摘要", [history[0]])
+        mock_set_profile.assert_called_once_with(conversation_summary="合并后的新摘要")
+        # chat 收到最近 12 条 + 新摘要
+        mock_chat.assert_called_once_with(
+            message="继续",
+            history=history[-12:],
+            interests=[],
+            reading_history=None,
+            conversation_summary="合并后的新摘要",
+        )
+
+
+def test_agent_chat_short_history_no_archive():
+    """history 未超阈值时不归档，chat 收到全量历史与 profile 摘要"""
+    with patch("backend.routers.agent.chat") as mock_chat, \
+         patch("backend.routers.agent.get_profile") as mock_profile, \
+         patch("backend.routers.agent.summarize_conversation") as mock_summarize, \
+         patch("backend.routers.agent.set_profile") as mock_set_profile:
+        mock_chat.return_value = "OK"
+        mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
+
+        history = [{"role": "user", "content": "hi"}] * 12
+        resp = client.post("/api/agent/chat", json={"message": "hello", "history": history})
+        assert resp.status_code == 200
+        mock_summarize.assert_not_called()
+        mock_set_profile.assert_not_called()
+        mock_chat.assert_called_once_with(
+            message="hello",
+            history=history,
+            interests=[],
+            reading_history=None,
+            conversation_summary="旧摘要",
+        )
+
+
+def test_agent_chat_archive_failure_degrades():
+    """摘要生成失败时保留旧摘要不存库，对话照常（截断历史）"""
+    with patch("backend.routers.agent.chat") as mock_chat, \
+         patch("backend.routers.agent.get_profile") as mock_profile, \
+         patch("backend.routers.agent.summarize_conversation", return_value=None) as mock_summarize, \
+         patch("backend.routers.agent.set_profile") as mock_set_profile:
+        mock_chat.return_value = "OK"
+        mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
+
+        history = [{"role": "user", "content": "hi"}] * 13
+        resp = client.post("/api/agent/chat", json={"message": "hello", "history": history})
+        assert resp.status_code == 200
+        mock_summarize.assert_called_once()
+        mock_set_profile.assert_not_called()  # 未存库
+        mock_chat.assert_called_once_with(
+            message="hello",
+            history=history[-12:],
+            interests=[],
+            reading_history=None,
+            conversation_summary="旧摘要",  # 注入旧摘要兜底
         )
 
 
@@ -88,6 +162,7 @@ def test_agent_chat_falls_back_to_profile_interests():
             history=None,
             interests=["CV", "NLP"],
             reading_history=None,
+            conversation_summary=None,
         )
 
 
@@ -124,6 +199,7 @@ def test_agent_chat_passes_resolved_reading_history():
             history=None,
             interests=[],
             reading_history=["Paper One", "Paper Two"],
+            conversation_summary=None,
         )
 
 
@@ -145,4 +221,5 @@ def test_agent_chat_reading_history_all_invalid_passes_none():
             history=None,
             interests=[],
             reading_history=None,
+            conversation_summary=None,
         )

@@ -1,20 +1,68 @@
 # 项目 Bug
 
-> 最后更新: 2026-08-18
+> 最后更新: 2026-08-20
 
 ---
 
 ## 已知问题
 
-### 机器之心 RSS 免费额度 429 限流
+### 机器之心 RSS 免费额度 429 限流（已实现源头退避）
 
-- **现象**: 频繁请求 `https://mcp.applications.jiqizhixin.com/rss?token=...` 返回 429 Too Many Requests（首个请求 200，随后被限流）
+- **官方守则**: 每个凭证**最多每 60 分钟请求一次，每日最多 25 次**，单次最多返回最近 10 条；超限返回 429，限额恢复后可用
 - **影响**: RSS 源采集返回空，其他源不受影响（优雅降级）；不是代码问题
-- **应对**: scheduler 默认 6h 间隔（每天 4 次请求）应合规；避免频繁调用 `trigger_collection`；配额窗口恢复后自动可用
+- **应对**: ✅ **2026-08-20 已实现 60 分钟退避**（`RSSSource._backoff_active` + 模块级 `_last_request_ts`）——两次请求间隔 <60min 直接跳过不发请求，24h 自然 ≤24 次落在每日预算内；当前 429 为前期测试+采集叠加消耗的残留，配额重置后自动恢复
 
 ---
 
 ## 已修复
+
+### #14 LLM 语义过滤输出截断（推理模型 max_tokens 不足）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-20（手动采集日志刷屏"LLM 判断输出无法解析"）
+- **修复时间**: 2026-08-20
+- **原因**: `llm._llm_is_ai_related`/`score_quality` 使用 `max_tokens=64`，但 `.env` 的 `deepseek-v4-flash` 是**推理模型**——响应先输出 `reasoning_content`（思考）再输出 JSON。实测单次简单调用消耗 33 推理 + 6 JSON tokens；复杂文章推理更长，64 tokens 预算被思考占满 → `content` 为空（`''`）或 JSON 截断（`'{"relevant":'`），批量采集时几乎每篇解析失败并刷警告日志
+- **解决**: max_tokens 64 → 256（留足推理 + JSON 预算）；`_chat_json` 空串归一化为 None（推理超长时静默走关键词降级，不再刷日志）；实测长中文标题/摘要正确判定、零解析警告
+
+### #13 视图切换 Tab 激活平行四边形未覆盖矩形背景（左上角露三角）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-20（yellow 主题验收）
+- **修复时间**: 2026-08-20
+- **原因**: `.aview__views` 为直角矩形容器（背景 `var(--input-bg)`），激活态是独立 `skewX(-10deg)` 平行四边形指示块 `.aview__views-indicator`——平行四边形几何上无法盖满矩形四角，左上角露出深色直角三角
+- **解决**: yellow 主题下改为按钮自带斜切背景（选中亮黄填充+黑字 / 未选中深炭灰），三个按钮斜边互相咬合无缝，容器背景透明、隐藏独立指示块（`display:none`，JS 计算的 left/width 逻辑不受影响）；青色主题滑动指示动画不受影响（`[data-theme='yellow'] html` 前缀特异性 0,2,1 压制 scoped）
+
+### #12 趋势页折线图空白（Y 轴有刻度但无线条）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-19（前端联调验收）
+- **修复时间**: 2026-08-19
+- **原因**: ECharts `category` 轴要求 series 数据对的 key 与 `xAxis.data` **逐字一致**才能定位坐标点。TrendsView 中 `xAxis.data`（trendChartDates）用 `M/D` 格式（如 `8/13`），而 series 内联生成的数据 key 用 `YYYY-MM-DD`（如 `2026-08-13`）→ 所有数据点被静默丢弃，折线/散点/面积全部不绘制（Y 轴仍按丢弃前的数据 max 显示刻度，造成"有刻度无数据"的假象）
+- **解决**: series 的日期 key 与筛选匹配 key 统一改为 `M/D` 格式，与 trendChartDates 输出一致；SQLite 实证 165 篇文章均在窗口内，数据层无问题
+
+### #11 输入框纯白背景穿透（EP 变量默认值 vs 主题覆盖层叠失败）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-19（前端联调验收）
+- **修复时间**: 2026-08-19
+- **原因**: Element Plus 2.8 输入控件背景使用 `var(--el-input-bg-color, var(--el-fill-color-blank))`，默认值为白色 `#fff`；`endfield-theme.css` 的覆盖选择器（如 `.el-input__wrapper`）特异性 `(0,1,0)` 与 EP 默认规则相同，而 EP 组件样式由 unplugin-vue-components 按需注入、晚于 main.ts 静态 import → 同特异性后加载者胜 → **白色背景穿透**（顶栏搜索框 / 筛选框 / Agent 提问框全部纯白）
+- **解决**: 三处加固——① `main.ts` 将 `endfield-theme.css` 改为动态导入（`import(...).then(mount)`，保证晚于 EP 组件样式注入）② 输入/下拉/弹层/消息等 51 处选择器加 `html` 前缀提特异性至 `(0,1,1)`（仍低于 yellow 主题 `[data-theme='yellow']` 的 0,2,0，不破坏黄色主题）③ `:root` 新增 46 条 EP CSS 变量映射兜底（`--el-input-bg-color`/`--el-fill-color-blank`/`--el-border-color` 等 → 项目令牌），双保险覆盖
+
+### #10 趋势页图表从未渲染（v-chart 未注册）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-19（前端优化验收）
+- **修复时间**: 2026-08-19
+- **原因**: TrendsView 使用 `<v-chart>`（vue-echarts）但组件从未在任何位置注册（main.ts 无 `app.component('VChart', ...)`，组件内也无局部引入）；vue-tsc 不校验模板组件名，typecheck 通过但运行时 Vue 将 `<v-chart>` 当原生元素渲染为空
+- **解决**: `main.ts` 全局注册 `app.component('VChart', VChart)` + `import '@/utils/echarts'`（按需注册）
+
+### #9 采集按钮描边半成品（全局 .el-button 简写覆盖 EP 变量）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-19（yellow 主题验收）
+- **修复时间**: 2026-08-19
+- **原因**: `endfield-theme.css` 全局 `.el-button { background: transparent }`（简写）以同级特异性、后导入顺序覆盖 Element Plus 变量驱动的 `background-color`；scoped 里只设 `--el-button-bg-color` 变量不生效，只有长写 `border-color` 生效 → 按钮呈现"黄边框 + 透明底"，hover 时命中全局 `background: var(--surface-hover)`
+- **解决**: scoped 样式直接写长写属性（`background-color`/`border-color`/`color`，特异性 0,3,0 全面压制全局规则），CSS 变量保留作双保险
 
 ### #8 set_profile 直接调用时行不存在静默失败
 

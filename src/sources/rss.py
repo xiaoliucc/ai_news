@@ -9,6 +9,7 @@ feed 列表通过 .env 的 RSS_FEEDS 配置（逗号分隔的 URL 列表），
 
 import asyncio
 import logging
+import time
 from xml.etree import ElementTree
 
 import httpx
@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 _RSS_NS = "{http://www.w3.org/2005/Atom}"
 
+# 官方免费 RSS 守则：同一凭证最多每 60 分钟请求一次、每日最多 25 次。
+# 60 分钟退避下 24h 最多 24 次，自动落在每日预算内。
+# 模块级状态：scheduler 每次采集都会新建 RSSSource 实例，退避必须跨实例共享。
+_last_request_ts: float | None = None
+# 429（限流/额度耗尽）后冷却：每日 25 次额度耗尽后任何请求都会 429，
+# 冷却 6h 避免每 60 分钟白碰一次壁（额度按日重置，次日自动恢复探测）。
+_last_429_ts: float | None = None
+_429_COOLDOWN_SECONDS = 6 * 3600.0
+
 
 class RSSSource(SourcePlugin):
     """RSS/Atom feed 聚合采集器。
@@ -27,34 +37,64 @@ class RSSSource(SourcePlugin):
     Attributes:
         name: 数据源名称 "rss"。
         feeds: 待聚合的 feed URL 列表（构造时传入）。
+        min_interval: 两次请求的最小间隔（秒），默认 3600（官方免费额度）；
+            传入 0 可禁用退避（测试用）。
     """
 
     name = "rss"
 
-    def __init__(self, feeds: list[str] | None = None):
+    def __init__(self, feeds: list[str] | None = None, min_interval: float = 3600.0):
         """初始化 RSS 源。
 
         Args:
             feeds: feed URL 列表；空或 None 表示未配置，fetch 返回空。
+            min_interval: 请求最小间隔秒数，默认 3600（官方免费额度 60 分钟/次）。
         """
         self.feeds = feeds or []
+        self.min_interval = min_interval
 
     async def fetch(self, limit: int = 20) -> list[Article]:
         """并发抓取所有 feed 并解析为 Article。
+
+        遵守官方免费 RSS 频率限制：距上次请求不足 min_interval 时跳过
+        （不打请求），避免 429 与每日配额耗尽。
 
         Args:
             limit: 每个 feed 最多取的文章条数。
 
         Returns:
-            list[Article]: 聚合后的文章列表；单个 feed 失败只跳过该 feed。
+            list[Article]: 聚合后的文章列表；退避中、未配置或单个 feed
+            失败时返回空列表。
         """
+        global _last_request_ts
+
         if not self.feeds:
             logger.info("RSS_FEEDS 未配置，RSS 源跳过")
+            return []
+
+        now = time.monotonic()
+        # 429 冷却：额度耗尽后任何请求都会 429，冷却期内直接跳过
+        if _last_429_ts is not None and now - _last_429_ts < _429_COOLDOWN_SECONDS:
+            logger.info(
+                "RSS 源 429 冷却中：%.0f 分钟后重试",
+                (_429_COOLDOWN_SECONDS - (now - _last_429_ts)) / 60,
+            )
+            return []
+
+        if _backoff_active(now, _last_request_ts, self.min_interval):
+            logger.info(
+                "RSS 源退避中：距上次请求 %.0fs（下限 %.0fs），跳过本轮",
+                now - (_last_request_ts or 0),
+                self.min_interval,
+            )
             return []
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             tasks = [self._fetch_feed(client, url, limit) for url in self.feeds]
             results = await asyncio.gather(*tasks)
+
+        # 无论成败都记录请求时间（429/5xx 同样消耗配额窗口）
+        _last_request_ts = time.monotonic()
 
         merged: list[Article] = []
         for articles in results:
@@ -74,10 +114,17 @@ class RSSSource(SourcePlugin):
         Returns:
             list[Article]: 解析出的文章列表；失败返回空列表。
         """
+        global _last_429_ts
         try:
             response = await client.get(url)
             response.raise_for_status()
             return self._parse_feed(response.text, url, limit)
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 429:
+                # 限流/额度耗尽：进入长冷却，后续请求直接跳过
+                _last_429_ts = time.monotonic()
+            logger.warning("RSS feed 抓取失败 %s: %s", url, exc)
+            return []
         except (httpx.HTTPError, ValueError) as exc:
             logger.warning("RSS feed 抓取失败 %s: %s", url, exc)
             return []
@@ -142,6 +189,22 @@ class RSSSource(SourcePlugin):
                 break
 
         return articles
+
+
+def _backoff_active(now: float, last_ts: float | None, min_interval: float) -> bool:
+    """判断当前是否处于请求退避期。
+
+    Args:
+        now: 当前单调时钟（time.monotonic()）。
+        last_ts: 上次请求的单调时钟；None 表示从未请求过。
+        min_interval: 最小请求间隔（秒）；<=0 表示禁用退避。
+
+    Returns:
+        bool: 距上次请求不足 min_interval 返回 True（应跳过本轮请求）。
+    """
+    if min_interval <= 0 or last_ts is None:
+        return False
+    return now - last_ts < min_interval
 
 
 def _first_text(element: ElementTree.Element, *tags: str) -> str | None:

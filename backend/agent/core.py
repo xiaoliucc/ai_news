@@ -126,6 +126,7 @@ async def chat(
     history: list[dict] | None = None,
     interests: list[str] | None = None,
     reading_history: list[str] | None = None,
+    conversation_summary: str | None = None,
 ) -> str:
     """执行一轮 Agent 对话（非流式）。
 
@@ -138,6 +139,7 @@ async def chat(
         history: 对话历史，格式 [{"role": "user"/"assistant", "content": "..."}, ...]。
         interests: 用户关注方向，注入 system prompt 用于排序和筛选。
         reading_history: 用户最近读过的文章标题列表，注入 prompt 避免重复推荐。
+        conversation_summary: 跨会话对话摘要（P2），注入 prompt 提供历史结论。
 
     Returns:
         str: LLM 最终回复文本。LLM 未配置时返回配置提示。
@@ -149,6 +151,7 @@ async def chat(
     system_prompt = prompts.build_system_prompt(
         interests=interests,
         reading_history=reading_history,
+        conversation_summary=conversation_summary,
     )
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     if history:
