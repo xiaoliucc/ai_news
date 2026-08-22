@@ -34,6 +34,12 @@ SOURCE_META = [
         "description": "中文源聚合（RSS_FEEDS 配置，当前含机器之心官方 RSS）",
         "category": "chinese_media",
     },
+    {
+        "name": "github",
+        "label": "GitHub Trending",
+        "description": "今日热门开源项目（需代理访问）",
+        "category": "tech_community",
+    },
 ]
 
 SOURCE_NAMES = [m["name"] for m in SOURCE_META]

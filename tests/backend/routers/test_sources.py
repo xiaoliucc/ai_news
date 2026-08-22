@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
-from backend.routers.sources import router
+from backend.routers.sources import SOURCE_NAMES, router
 from fastapi import FastAPI
 
 # 创建测试用 app
@@ -40,7 +40,7 @@ def test_list_sources_default(mock_get_source_stats, mock_profile):
     assert response.status_code == 200
     data = response.json()
     assert "sources" in data
-    assert len(data["sources"]) == 4
+    assert len(data["sources"]) == len(SOURCE_NAMES)
 
     for s in data["sources"]:
         assert "name" in s
@@ -63,6 +63,7 @@ def test_list_sources_default(mock_get_source_stats, mock_profile):
     assert "arxiv" in names
     assert "huggingface_papers" in names
     assert "rss" in names  # RSS 聚合源默认启用
+    assert "github" in names  # GitHub Trending 默认启用
 
 
 def test_list_sources_with_counts(mock_get_source_stats, mock_profile):
@@ -119,7 +120,12 @@ def test_toggle_enable_source(mock_get_source_stats, mock_profile):
 
 def test_toggle_normalizes_to_all(mock_get_source_stats, mock_profile):
     """开启到全部源时，规范化存回空列表（全选态）。"""
-    mock_profile["selected_sources"] = ["hackernews", "arxiv", "huggingface_papers"]
+    mock_profile["selected_sources"] = [
+        "hackernews",
+        "arxiv",
+        "huggingface_papers",
+        "github",
+    ]
     # 开启最后缺的 rss → 变成全选 → 规范化为 []
     response = client.put("/api/sources/rss", json={"enabled": True})
     assert response.status_code == 200

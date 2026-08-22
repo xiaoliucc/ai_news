@@ -36,6 +36,7 @@ cd frontend && npm run build
 | ArXiv | cs.AI / cs.CL / cs.CV / cs.LG 等 11 个分类新论文 | 官方 API，免费免认证 |
 | HuggingFace Papers | 每日 AI 论文 + 代码实现 | Hugging Face API（`/api/papers`），免费免认证 |
 | RSS 聚合 | 中文源聚合（RSS/Atom），当前含机器之心官方 RSS | `RSS_FEEDS` 配置（逗号分隔），免费额度限流 |
+| GitHub Trending | 今日热门开源项目（今日新增 star 热度） | 静态页解析（无官方 API），需代理 |
 
 ## 项目结构
 
@@ -50,11 +51,12 @@ cd frontend && npm run build
 │   │   ├── ranking.py       # 复合排序（时间衰减 + 源权重）
 │   │   └── llm.py           # LLM 语义判断 + 质量打分（OpenAI 兼容端点）
 │   └── sources/             # 数据源插件
-│       ├── base.py           # SourcePlugin 抽象基类
+│       ├── base.py           # SourcePlugin 抽象基类（含全局代理 PROXY_URL）
 │       ├── hackernews.py     # Hacker News（Firebase，并发拉详情）
 │       ├── arxiv.py          # ArXiv 论文采集
 │       ├── papers.py         # HuggingFace Papers 采集
-│       └── rss.py            # 通用 RSS/Atom 聚合（中文源，RSS_FEEDS 配置）
+│       ├── rss.py            # 通用 RSS/Atom 聚合（中文源，RSS_FEEDS 配置）
+│       └── github.py         # GitHub Trending（静态页解析，需代理）
 ├── backend/                  # FastAPI 后端 + AI Agent
 │   ├── main.py              # FastAPI app（lifespan + CORS + 5 路由）
 │   ├── database.py          # SQLite 数据层（3 表，WAL 模式）
@@ -97,7 +99,7 @@ cd frontend && npm run build
 | ASGI 服务器 | uvicorn |
 | 数据库 | SQLite（WAL 模式） |
 | 向量存储 | ChromaDB + SentenceTransformer |
-| LLM | OpenAI 兼容端点（默认 DeepSeek v4-flash） |
+| LLM | OpenAI 兼容端点（默认 qwen-turbo / DashScope，可切 DeepSeek） |
 | 定时任务 | APScheduler（AsyncIOScheduler） |
 | 前端框架 | Vue 3 + Vite + TypeScript |
 | UI 组件库 | Element Plus（按需引入） |
@@ -140,15 +142,20 @@ uv run pytest -k "dedup"
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `DEEPSEEK_API_KEY` | LLM API 密钥 | — |
-| `LLM_MODEL_ID` | LLM 模型 ID | `deepseek-chat` |
-| `LLM_BASE_URL` | LLM API 地址 | `https://api.deepseek.com/v1` |
+| `DASHSCOPE_API_KEY` | 阿里百炼 key（base_url 含 `dashscope` 时生效，qwen-turbo） | — |
+| `DEEPSEEK_API_KEY` | DeepSeek key（base_url 不含 dashscope 时生效） | — |
+| `LLM_MODEL_ID` | LLM 模型 ID | `qwen-turbo` |
+| `LLM_BASE_URL` | LLM API 地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `LLM_TIMEOUT` | LLM 请求超时（秒） | `60` |
+| `HTTPS_PROXY` | 全局网络代理（墙外源 GitHub/HF 需要）；留空=直连；多设备各自维护 `.env`，改动后重启生效 | 空（直连） |
+| `HF_HUB_OFFLINE` | 嵌入模型离线加载（模型缓存后置 1，避免访问 huggingface.co 卡重试） | `1` |
 | `SQLITE_PATH` | SQLite 数据库路径 | `backend/db/articles.db` |
 | `CHROMA_DIR` | ChromaDB 持久化目录 | `backend/db/chroma` |
 | `RSS_FEEDS` | RSS 聚合源列表（逗号分隔），当前含机器之心官方 RSS（免费配额，频繁请求会 429 限流）；其余中文源可填自托管 RSSHub 路由 | 空（不启用） |
 | `COLLECTION_LIMIT` | 每源采集条数 | `20` |
 | `COLLECTION_HOURS` | 定时采集间隔（小时） | `6` |
+
+完整配置模板见 `.env.example`（每台设备 `cp .env.example .env` 后按本机填写）。
 
 ## 后续计划
 

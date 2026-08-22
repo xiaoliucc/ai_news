@@ -12,7 +12,7 @@ import logging
 import httpx
 
 from src.models import Article
-from src.sources.base import SourcePlugin
+from src.sources.base import PROXY_URL, SourcePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class HuggingFacePaperSource(SourcePlugin):
             list[Article]: 采集到的论文列表。网络错误或数据异常返回空列表。
         """
         articles: list[Article] = []
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, proxy=PROXY_URL) as client:
             try:
                 response = await client.get(
                     f"{self.base_url}/papers",

@@ -1,0 +1,167 @@
+"""
+测试 GitHub Trending 数据源 — 页面解析。
+
+覆盖：
+    - _parse_html 单元测试（纯函数，无网络）：基础字段 / 无描述 / 无今日 star
+      回退总 star / 截断 / 畸形 / 空页
+    - _extract_stars_today / _parse_int 辅助函数
+    - fetch 网络错误返回空（httpx 异常模拟）
+"""
+
+import httpx
+import pytest
+
+from src.sources.github import GitHubSource, _extract_stars_today, _parse_int
+
+
+# ── fixture HTML ─────────────────────────────────────────────────────────────
+
+def _trending_html() -> str:
+    """模仿 github.com/trending 的 Box-row 结构（两个仓库）。"""
+    return """<html><body><main>
+  <article class="Box-row">
+    <h2 class="h3 lh-condensed">
+      <a href="/openai/openai">openai / <b>openai</b></a>
+    </h2>
+    <p>OpenAI 官方仓库</p>
+    <div class="f6">
+      <span><span class="repo-language-color"></span>
+        <span itemprop="programmingLanguage">Python</span></span>
+      <a href="/openai/openai/stargazers">82,431</a>
+      <a href="/openai/openai/forks">12,345</a>
+      <span class="float-sm-right">+1,234 stars today</span>
+    </div>
+  </article>
+  <article class="Box-row">
+    <h2 class="h3 lh-condensed">
+      <a href="/anthropics/anthropic-sdk-python">anthropics / <b>anthropic-sdk-python</b></a>
+    </h2>
+    <p>Anthropic Python SDK</p>
+    <div class="f6">
+      <span><span class="repo-language-color"></span>
+        <span itemprop="programmingLanguage">TypeScript</span></span>
+      <a href="/anthropics/anthropic-sdk-python/stargazers">567</a>
+      <a href="/anthropics/anthropic-sdk-python/forks">89</a>
+      <span class="float-sm-right">+12 stars today</span>
+    </div>
+  </article>
+</main></body></html>
+"""
+
+
+# ── 单元测试：_parse_html ────────────────────────────────────────────────────
+
+def test_parse_basic_fields():
+    """基础字段映射：id/title/url/summary/score/tags/author/language/published_at。"""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    articles = GitHubSource()._parse_html(_trending_html(), limit=10, published_at=now)
+    assert len(articles) == 2
+
+    a = articles[0]
+    assert a.id == "github_openai/openai"
+    assert a.title == "openai/openai"
+    assert a.url == "https://github.com/openai/openai"
+    assert a.source == "github"
+    assert a.summary == "OpenAI 官方仓库"
+    assert a.author == "openai"
+    assert a.score == 1234  # 今日新增 star（去千分位逗号）
+    assert a.tags == ["Python"]
+    assert a.language == "en"
+    assert a.published_at == now  # trending 无日期，取采集时刻
+
+    b = articles[1]
+    assert b.id == "github_anthropics/anthropic-sdk-python"
+    assert b.score == 12
+    assert b.tags == ["TypeScript"]
+
+
+def test_parse_limit_truncation():
+    """limit 截断生效。"""
+    articles = GitHubSource()._parse_html(_trending_html(), limit=1)
+    assert len(articles) == 1
+    assert articles[0].title == "openai/openai"
+
+
+def test_parse_no_today_stars_falls_back_to_total():
+    """无"stars today"时回退总 star 数（去逗号）。"""
+    html = _trending_html().replace("+1,234 stars today", "")
+    articles = GitHubSource()._parse_html(html, limit=10)
+    assert articles[0].score == 82431
+
+
+def test_parse_missing_description():
+    """无描述时 summary 为 None。"""
+    html = _trending_html().replace("<p>OpenAI 官方仓库</p>", "")
+    articles = GitHubSource()._parse_html(html, limit=10)
+    assert articles[0].summary is None
+
+
+def test_parse_missing_language():
+    """无语言标签时 tags 为空。"""
+    html = _trending_html().replace(
+        '<span itemprop="programmingLanguage">Python</span>', ""
+    )
+    articles = GitHubSource()._parse_html(html, limit=10)
+    assert articles[0].tags == []
+
+
+def test_parse_malformed_row_skipped():
+    """缺少 h2 a 的行跳过，不影响其他行。"""
+    html = _trending_html().replace(
+        '<a href="/openai/openai">openai / <b>openai</b></a>', ""
+    )
+    articles = GitHubSource()._parse_html(html, limit=10)
+    assert len(articles) == 1
+    assert articles[0].title == "anthropics/anthropic-sdk-python"
+
+
+def test_parse_empty_html():
+    """空页/无 Box-row 返回空列表。"""
+    assert GitHubSource()._parse_html("", limit=10) == []
+    assert GitHubSource()._parse_html("<html><body></body></html>", limit=10) == []
+
+
+# ── 辅助函数 ─────────────────────────────────────────────────────────────────
+
+def test_extract_stars_today():
+    assert _extract_stars_today("+1,234 stars today") == 1234
+    assert _extract_stars_today("+56 stars today") == 56
+    assert _extract_stars_today("no stars info") is None
+    assert _extract_stars_today("") is None
+
+
+def test_parse_int():
+    assert _parse_int("1,234") == 1234
+    assert _parse_int(" 82,431 ") == 82431
+    assert _parse_int("0") == 0
+    assert _parse_int("abc") is None
+    assert _parse_int("") is None
+
+
+# ── fetch 网络错误降级 ────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_fetch_network_error_returns_empty(monkeypatch):
+    """fetch 网络错误返回空列表（不影响其他源）。"""
+
+    class FakeResp:
+        def raise_for_status(self):
+            raise httpx.ConnectError("proxy down")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get(self, url):
+            return FakeResp()
+
+    monkeypatch.setattr("src.sources.github.httpx.AsyncClient", FakeClient)
+    assert await GitHubSource().fetch(limit=5) == []

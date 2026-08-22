@@ -230,6 +230,9 @@ onMounted(() => {
 .hview__item-src.is-rss {
   color: var(--warn);
 }
+.hview__item-src.is-github {
+  color: var(--green);
+}
 .hview__score {
   font-size: 11px;
   font-weight: 600;

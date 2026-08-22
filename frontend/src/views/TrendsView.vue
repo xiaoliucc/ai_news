@@ -41,6 +41,7 @@ const SERIES = [
   { name: 'arxiv' },
   { name: 'huggingface_papers' },
   { name: 'rss' },
+  { name: 'github' },
 ] as const
 
 /** 时间折线图 */
@@ -79,7 +80,7 @@ const trendChartOption = computed(() => {
   })
   return {
     backgroundColor: 'transparent',
-    color: [colors.hackernews, colors.arxiv, colors.huggingface_papers, colors.rss],
+    color: [colors.hackernews, colors.arxiv, colors.huggingface_papers, colors.rss, colors.github],
     legend: {
       top: 0,
       right: 0,

@@ -1,6 +1,6 @@
 # 项目 Bug
 
-> 最后更新: 2026-08-20
+> 最后更新: 2026-08-22
 
 ---
 
@@ -15,6 +15,22 @@
 ---
 
 ## 已修复
+
+### #17 Agent 单篇点名被当主题检索（LLM 工具选择不可靠）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-22（用户点"AI 解读"后 LLM 输出 `{"query": "...", "days": 7}` 走 search_articles）
+- **修复时间**: 2026-08-22
+- **原因**: ① 前端"AI 解读"预填的是文章**标题**（如 `AprilNEA/OpenLogi`）而非 ID（真实 ID 是 `github_AprilNEA/OpenLogi`），LLM 无法用 get_article_detail 精确查询 ② LLM 工具选择不可控——把点名单篇当主题查询走 search_articles，语义检索对仓库路径等专有名词几乎无效
+- **解决**: 四层加固——① ArticleCard 预填消息附文章 ID（`解读这篇文章：X（文章 ID: github_X）`）② get_article_detail 工具描述支持标题/ID 双入参，search_articles 明确"点名单篇时不用" ③ TOOL_RULES prompt 新增工具选择规则 ④ `_search_articles` 对无空格专有名词 query 先精确解析（`_resolve_article` 命中直接返回，exact_match 标记）；顺带 `_resolve_article()` 让 get_article_detail/summarize_articles 都支持标题回退
+
+### #16 GitHub 卡片显示"从未"（published_at 缺失）
+
+- **状态**: 已修复
+- **发现时间**: 2026-08-22（GitHub 源接入后前端卡片验收）
+- **修复时间**: 2026-08-22
+- **原因**: GitHubSource 的 `published_at=None`（trending 页面不含发布时间）→ 前端 `formatRelativeTime(null)` 显示"从未"，且排序时间衰减吃默认 0.5 折损
+- **解决**: 语义上 trending 榜单即"今天"的数据，`published_at` 统一取采集时刻（fetch 时一次取 now 传入 `_parse_html`）；重新采集后新数据带时间戳（卡片显示"刚刚/x 分钟前"）
 
 ### #15 趋势分析/摘要工具输出为空（推理模型长任务思考截断）
 

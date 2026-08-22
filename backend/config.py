@@ -31,3 +31,9 @@ RSS_FEEDS = [
     for f in os.getenv("RSS_FEEDS", "").split(",")
     if f.strip()
 ]
+
+# 网络代理：墙外源（GitHub / HuggingFace）需要时填写本机代理地址；
+# 留空 = 直连。多设备各自维护 .env，代理地址按设备填写（Clash 默认 7890）。
+# 优先级：系统环境变量 HTTPS_PROXY（若已存在）> .env > 直连。
+# 改动需重启后端生效（启动日志会打印当前网络模式）。
+PROXY_URL = os.getenv("HTTPS_PROXY", "").strip() or None

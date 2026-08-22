@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Type
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from .config import COLLECTION_HOURS, COLLECTION_LIMIT, RSS_FEEDS
+from .config import COLLECTION_HOURS, COLLECTION_LIMIT, PROXY_URL, RSS_FEEDS
 from .database import get_profile, save_articles
 from .vector_store import add_articles
 from src.engine import NewsEngine
@@ -12,6 +12,7 @@ from src.models import Article
 from src.pipeline import llm
 from src.sources.arxiv import ArxivSource
 from src.sources.base import SourcePlugin
+from src.sources.github import GitHubSource
 from src.sources.hackernews import HackerNewsSource
 from src.sources.papers import HuggingFacePaperSource
 from src.sources.rss import RSSSource
@@ -28,6 +29,7 @@ SOURCE_REGISTRY: dict[str, object] = {
     "arxiv": ArxivSource,
     "huggingface_papers": HuggingFacePaperSource,
     "rss": lambda: RSSSource(RSS_FEEDS),
+    "github": GitHubSource,
 }
 
 
@@ -142,7 +144,11 @@ def start():
         replace_existing=True,
     )
     _scheduler.start()
-    logger.info("Scheduler started, interval=%dh", COLLECTION_HOURS)
+    logger.info(
+        "Scheduler started, interval=%dh, network=%s",
+        COLLECTION_HOURS,
+        f"proxy {PROXY_URL}" if PROXY_URL else "direct",
+    )
 
     # 启动后立即采集一次，不等第一轮间隔
     asyncio.ensure_future(_collect_now())

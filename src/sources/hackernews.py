@@ -14,7 +14,7 @@ import asyncio
 import httpx
 
 from src.models import Article
-from src.sources.base import SourcePlugin
+from src.sources.base import PROXY_URL, SourcePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class HackerNewsSource(SourcePlugin):
         Returns:
             list[Article]: 采集到的文章列表（失败条被过滤）。
         """
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, proxy=PROXY_URL) as client:
             try:
                 response = await client.get(f"{self.base_url}topstories.json")
                 response.raise_for_status()

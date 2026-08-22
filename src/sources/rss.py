@@ -15,7 +15,7 @@ from xml.etree import ElementTree
 import httpx
 
 from src.models import Article
-from src.sources.base import SourcePlugin
+from src.sources.base import PROXY_URL, SourcePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class RSSSource(SourcePlugin):
             )
             return []
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, proxy=PROXY_URL) as client:
             tasks = [self._fetch_feed(client, url, limit) for url in self.feeds]
             results = await asyncio.gather(*tasks)
 

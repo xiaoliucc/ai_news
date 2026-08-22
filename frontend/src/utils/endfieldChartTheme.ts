@@ -13,6 +13,7 @@ export const ENDFIELD_SERIES_COLORS = {
   arxiv: '#3b82f6',
   huggingface_papers: '#a855f7',
   rss: '#e87a3a',
+  github: '#22c55e',
 } as const
 
 export type EndfieldSeriesKey = keyof typeof ENDFIELD_SERIES_COLORS

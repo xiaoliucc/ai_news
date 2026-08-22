@@ -18,6 +18,7 @@ const dict = {
     arxiv: { zh: '预印本', en: 'ARXIV' },
     huggingface_papers: { zh: 'HF 论文', en: 'HF PAPERS' },
     rss: { zh: 'RSS 聚合', en: 'RSS 聚合' },
+    github: { zh: 'GitHub 趋势', en: 'GITHUB TRENDING' },
   },
   stat: {
     totalRuns: { zh: '总采集次数', en: 'TOTAL RUNS' },
@@ -98,6 +99,7 @@ const dict = {
     searchPrompt: { zh: '搜索与「', en: 'Search for "' },
     searchPromptEnd: { zh: '」相关的资料', en: '" related materials' },
     digestPrompt: { zh: '解读这篇文章：', en: 'Digest this article: ' },
+    articleId: { zh: '文章 ID', en: 'article ID' },
     warn: {
       zh: '至少保留一个启用的信息源（对应后端 400：ALL_SOURCES_DISABLED）',
       en: 'Keep at least one source enabled (backend 400: ALL_SOURCES_DISABLED)',

@@ -58,7 +58,7 @@ export interface ChatMessage {
   toolCalls?: Array<{ name: ToolName; status: 'calling' | 'done' }>
 }
 
-export type SourceName = 'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss'
+export type SourceName = 'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss' | 'github'
 export type SourceCategory = 'tech_community' | 'academic' | 'chinese_media'
 
 export type ToolName = 'SEARCH' | 'SUMMARIZE' | 'ANALYZE_TREND' | 'TRIGGER_COLLECTION'

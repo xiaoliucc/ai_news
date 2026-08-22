@@ -35,14 +35,9 @@ const TIME_RANGES: Array<{ value: 1 | 3 | 7 | 14; label: string }> = [
   { value: 14, label: '14D' },
 ]
 
-/** 来源筛选选项（来自 Mock sources，按 category 配色） */
+/** 来源筛选选项（与后端 SOURCE_META 一致，按 category 配色） */
 const sourceOptions = computed(() => {
-  const names: Array<'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss'> = [
-    'hackernews',
-    'arxiv',
-    'huggingface_papers',
-    'rss',
-  ]
+  const names: SourceName[] = ['hackernews', 'arxiv', 'huggingface_papers', 'rss', 'github']
   return names.map((n) => ({ value: n, label: t(`srcLabel.${n}`) }))
 })
 
@@ -80,7 +75,7 @@ function onDays(v: number): void {
 }
 
 function onSources(v: string[]): void {
-  articlesStore.setFilter({ sources: v as Array<'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss'> })
+  articlesStore.setFilter({ sources: v as SourceName[] })
 }
 
 function onSort(v: string): void {

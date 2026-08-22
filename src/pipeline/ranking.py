@@ -22,6 +22,7 @@ SOURCE_WEIGHTS = {
     "arxiv": 0.6,
     "huggingface_papers": 0.8,
     "rss": 0.7,
+    "github": 0.9,
 }
 
 # 时间衰减半衰期（小时）

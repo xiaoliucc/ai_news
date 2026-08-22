@@ -12,6 +12,7 @@ wheels/
 # Secrets
 .env
 .env.*
+!.env.example
 
 # Local database files
 data/

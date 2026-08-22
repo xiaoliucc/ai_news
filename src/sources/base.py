@@ -1,8 +1,15 @@
 """数据源抽象基类。"""
 
+import os
 from abc import ABC, abstractmethod
 
 from src.models import Article
+
+# 网络代理（全局生效）：墙外源（GitHub / HuggingFace）需要时填写本机代理地址。
+# 读取 .env 的 HTTPS_PROXY（backend.config 加载 .env 后注入环境变量）；
+# 留空 = 直连。多设备各自维护 .env，代理地址按设备填写。
+# 注意：load_dotenv 不覆盖已存在的系统环境变量——系统已有 HTTPS_PROXY 时系统值优先。
+PROXY_URL = os.getenv("HTTPS_PROXY", "").strip() or None
 
 
 class SourcePlugin(ABC):

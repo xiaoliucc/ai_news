@@ -28,10 +28,12 @@ const langLabel = computed(() =>
 
 const sourceLabel = computed(() => t(`srcLabel.${props.article.source}`))
 
-/** 点击 AI 解读 → 打开右侧 Agent 面板并预填问题 */
+/** 点击 AI 解读 → 打开右侧 Agent 面板并预填问题（附文章 ID，引导 LLM 走精确查询） */
 function askAi(): void {
   if (!layoutStore.panelVisible) layoutStore.togglePanel()
-  agentStore.sendMessage(t('misc.digestPrompt') + props.article.title)
+  agentStore.sendMessage(
+    `${t('misc.digestPrompt')}${props.article.title}（${t('misc.articleId')}: ${props.article.id}）`,
+  )
 }
 </script>
 
@@ -52,7 +54,7 @@ function askAi(): void {
       <span class="acard__lang mono">{{ langLabel }}</span>
     </div>
 
-    <p class="acard__summary">{{ article.summary }}</p>
+    <p v-if="article.summary" class="acard__summary">{{ article.summary }}</p>
 
     <div class="acard__tags">
       <span v-for="t in article.tags" :key="t" class="acard__tag">{{ t }}</span>
@@ -160,6 +162,10 @@ function askAi(): void {
 .acard__src.is-rss {
   color: var(--warn);
   border-color: rgba(232, 122, 58, 0.35);
+}
+.acard__src.is-github {
+  color: var(--green);
+  border-color: rgba(34, 197, 94, 0.35);
 }
 .acard__time,
 .acard__lang {

@@ -110,12 +110,57 @@ async def test_get_article_detail_records_history(tmp_db, monkeypatch):
 async def test_get_article_detail_miss_no_record(tmp_db, monkeypatch):
     """文章不存在时不记录。"""
     monkeypatch.setattr(tools, "db_get_article", lambda aid: None)
+    monkeypatch.setattr(tools, "db_query_articles", lambda **kw: [])
 
     result = await tools._get_article_detail({"article_id": "missing"})
     assert "error" in result
 
     profile = get_profile()
     assert profile["reading_history"] == []
+
+
+# ── _resolve_article：LLM 把标题当 ID 传时的标题回退 ─────────────────────────
+
+def test_resolve_article_by_id(tmp_db, monkeypatch):
+    """按 ID 命中直接返回，不触发标题回退。"""
+    fake = {"id": "github_owner/repo", "title": "owner/repo"}
+    monkeypatch.setattr(tools, "db_get_article", lambda aid: fake)
+    assert tools._resolve_article("github_owner/repo") is fake
+
+
+@pytest.mark.asyncio
+async def test_get_article_detail_title_fallback(tmp_db, monkeypatch):
+    """LLM 传标题（如 GitHub owner/repo）而非 ID 时，按标题精确匹配回退。"""
+    fake = {"id": "github_AprilNEA/OpenLogi", "title": "AprilNEA/OpenLogi"}
+    monkeypatch.setattr(tools, "db_get_article", lambda aid: None)
+    monkeypatch.setattr(
+        tools, "db_query_articles",
+        lambda **kw: [{"id": "arxiv_1", "title": "其他文章"}, fake],
+    )
+
+    result = await tools._get_article_detail({"article_id": "AprilNEA/OpenLogi"})
+    assert result["article"]["id"] == "github_AprilNEA/OpenLogi"
+    # 标题回退命中后仍记录阅读历史（记录真实 ID 而非传入的标题）
+    assert get_profile()["reading_history"] == ["github_AprilNEA/OpenLogi"]
+
+
+@pytest.mark.asyncio
+async def test_summarize_articles_title_fallback(tmp_db, monkeypatch):
+    """summarize 的 article_ids 传标题时同样按标题回退。"""
+    fake = {"id": "github_owner/repo", "title": "owner/repo", "summary": "desc"}
+    monkeypatch.setattr(tools, "db_get_article", lambda aid: None)
+    monkeypatch.setattr(
+        tools, "db_query_articles",
+        lambda **kw: [fake],
+    )
+    monkeypatch.setattr(
+        tools, "_chat_json",
+        lambda *a, **k: json.dumps({"summaries": [{"id": "github_owner/repo", "summary": "s"}]}),
+    )
+
+    result = await tools._summarize_articles({"article_ids": ["owner/repo"]})
+    assert "summaries" in result
+    assert get_profile()["reading_history"] == ["github_owner/repo"]
 
 
 @pytest.mark.asyncio
@@ -176,6 +221,11 @@ def _seed_articles():
             source="arxiv", summary="多模态模型综述", author=None,
             published_at=None, score=30, tags=["CV"], language="zh",
         ),
+        Article(
+            id="github_AprilNEA/OpenLogi", title="AprilNEA/OpenLogi", url="https://github.com/AprilNEA/OpenLogi",
+            source="github", summary="开源日志工具", author="AprilNEA",
+            published_at=None, score=500, tags=["Go"], language="en",
+        ),
     ]
     save_articles(articles, [SourceStats(name="x")], 0)
 
@@ -213,4 +263,43 @@ async def test_search_articles_falls_back_when_chroma_empty(tmp_db, monkeypatch)
     result = await tools._search_articles({"query": "大模型", "days": 30})
     assert result["total"] == 1
     assert result["articles"][0]["id"] == "arxiv_1"
+    assert result.get("fallback") == "keyword"
+
+
+@pytest.mark.asyncio
+async def test_search_articles_exact_match_by_title(tmp_db, monkeypatch):
+    """无空格专有名词 query（如 GitHub 标题）直接精确解析，不走语义检索。"""
+    _seed_articles()
+    # 即使 ChromaDB 本可返回内容，精确匹配也应优先
+    monkeypatch.setattr(tools, "vs_search", lambda **kw: [{"id": "other", "title": "x"}])
+
+    result = await tools._search_articles({"query": "AprilNEA/OpenLogi", "days": 30})
+    assert result["total"] == 1
+    assert result["articles"][0]["id"] == "github_AprilNEA/OpenLogi"
+    assert result.get("exact_match") is True
+
+
+@pytest.mark.asyncio
+async def test_search_articles_exact_match_by_id(tmp_db, monkeypatch):
+    """无空格 query 是文章 ID 时直接精确解析。"""
+    _seed_articles()
+
+    result = await tools._search_articles({"query": "github_AprilNEA/OpenLogi", "days": 30})
+    assert result["total"] == 1
+    assert result["articles"][0]["id"] == "github_AprilNEA/OpenLogi"
+    assert result.get("exact_match") is True
+
+
+@pytest.mark.asyncio
+async def test_search_articles_exact_miss_goes_semantic(tmp_db, monkeypatch):
+    """精确解析未命中时走正常语义检索（不回退出错）。"""
+    _seed_articles()
+    monkeypatch.setattr(tools, "vs_search", lambda **kw: [])
+    monkeypatch.setattr(
+        tools, "_keyword_fallback",
+        lambda *a, **kw: [{"id": "arxiv_1", "title": "Transformer 大模型研究"}],
+    )
+
+    result = await tools._search_articles({"query": "大模型 论文", "days": 30})
+    assert result["total"] == 1
     assert result.get("fallback") == "keyword"

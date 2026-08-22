@@ -83,7 +83,7 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "search_articles",
-            "description": "语义检索已采集的文章，按主题/关键词/时间范围查询。回答用户关于已采集内容的问题时使用。",
+            "description": "按主题/关键词语义检索已采集的多篇文章。用于回答'最近有什么关于 X 的内容'这类主题性、模糊性查询。注意：用户点名具体某一篇文章（给出标题或文章 ID）时，不要用本工具，改用 get_article_detail。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -104,13 +104,13 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "get_article_detail",
-            "description": "获取单篇文章的完整内容（标题/摘要/链接/标签）。",
+            "description": "获取单篇文章的完整内容（标题/摘要/链接/标签）。用户点名某一篇文章（给出标题或文章 ID）时使用。article_id 支持两种形式：文章 ID（如 github_owner/repo、arxiv_2401.12345），或文章标题（如 openai/codex）——标题形式会自动按标题精确匹配。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "article_id": {
                         "type": "string",
-                        "description": "文章 ID，如 arxiv_2401.12345",
+                        "description": "文章 ID 或文章标题，如 github_owner/repo、arxiv_2401.12345",
                     },
                 },
                 "required": ["article_id"],
@@ -184,6 +184,25 @@ async def _search_articles(args: dict) -> dict:
     if not query:
         return {"error": "query 不能为空", "articles": []}
 
+    # 精确兜底：query 是文章 ID 或标题（无空格的专有名词，如 github_owner/repo）
+    # 时直接按 ID/标题解析——语义检索对这类标识符几乎无效
+    if " " not in query:
+        exact = _resolve_article(query)
+        if exact is not None:
+            return {
+                "articles": [{
+                    "id": exact["id"],
+                    "title": exact["title"],
+                    "source": exact["source"],
+                    "score": exact.get("score", 0),
+                    "summary": (exact.get("summary") or "")[:300],
+                    "distance": None,
+                }],
+                "total": 1,
+                "days_queried": days,
+                "exact_match": True,
+            }
+
     # to_thread：ChromaDB 首次初始化可能触发嵌入模型下载（阻塞 I/O），
     # 不能让 event loop 卡住
     hits = await asyncio.to_thread(
@@ -218,11 +237,33 @@ async def _search_articles(args: dict) -> dict:
     return {"articles": articles, "total": len(articles), "days_queried": days}
 
 
+def _resolve_article(identifier: str) -> dict | None:
+    """按 ID 或标题解析文章。
+
+    LLM 有时把标题当作 article_id 传入——如 GitHub 卡片"AI 解读"预填的是
+    标题（owner/repo），而真实 ID 是 github_owner/repo。ID 查不到时回退
+    标题精确匹配（扫描最近 30 天采集，GitHub 无发布时间时靠 collected_at）。
+
+    Args:
+        identifier: 文章 ID 或标题。
+
+    Returns:
+        dict | None: 匹配的文章记录；都查不到返回 None。
+    """
+    a = db_get_article(identifier)
+    if a is not None:
+        return a
+    for r in db_query_articles(days=30, limit=2000):
+        if r["title"] == identifier:
+            return r
+    return None
+
+
 async def _get_article_detail(args: dict) -> dict:
     """获取文章详情（从 SQLite 查询）。
 
     Args:
-        args: {"article_id": str}，文章 ID。
+        args: {"article_id": str}，文章 ID 或标题。
 
     Returns:
         dict: {"article": {...}} 或 {"error": str, "article": None}。
@@ -230,11 +271,11 @@ async def _get_article_detail(args: dict) -> dict:
     article_id: str = args.get("article_id") or ""
     if not article_id:
         return {"error": "article_id 不能为空", "article": None}
-    a = db_get_article(article_id)
+    a = _resolve_article(article_id)
     if a is None:
         return {"error": f"文章 ID {article_id} 不存在", "article": None}
     # 用户查看详情 = 已读，隐式记录阅读历史
-    _record_reading_history([article_id])
+    _record_reading_history([a["id"]])
     return {"article": a}
 
 
@@ -253,11 +294,12 @@ async def _summarize_articles(args: dict) -> dict:
     article_ids = args.get("article_ids") or []
     articles = []
     for aid in article_ids:
-        a = db_get_article(aid)
+        # ID 与标题双通道解析（LLM 可能把标题当 ID 传）
+        a = _resolve_article(aid)
         if a is not None:
             articles.append(a)
     if not articles:
-        return {"error": "未找到匹配的文章 ID", "summaries": []}
+        return {"error": "未找到匹配的文章 ID 或标题", "summaries": []}
 
     # 用户要求概括 = 已读，隐式记录阅读历史
     _record_reading_history([a["id"] for a in articles])
