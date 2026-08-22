@@ -32,6 +32,8 @@ export const useAgentStore = defineStore('agent', () => {
   /* ---------- state ---------- */
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
+  /** 等待后端 LLM 响应中（尚未开始流式播放） */
+  const isWaiting = ref(false)
   const history = ref<ChatMessage[]>([])
   const activeTool = ref<{ name: ToolName; status: 'calling' | 'done' } | null>(null)
   const replyBuffer = ref('')
@@ -66,6 +68,7 @@ export const useAgentStore = defineStore('agent', () => {
     const toolCalls = inferToolCalls(trimmed)
 
     isStreaming.value = true
+    isWaiting.value = true
     replyBuffer.value = ''
     activeTool.value = null
 
@@ -82,23 +85,40 @@ export const useAgentStore = defineStore('agent', () => {
         history.value.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
       )
 
+      // 流式播放：首个字符到达前保持等待态（一直转圈）；到达时推入占位
+      // assistant 气泡承载增量文本，等待态结束切换为流式渲染
+      let placeholder: ChatMessage | null = null
       streamHandle = startStreaming(
         answer,
         toolCalls.map((t) => ({ ...t })),
         {
           onDelta: (d) => {
+            if (!placeholder) {
+              placeholder = {
+                role: 'assistant',
+                content: '',
+                timestamp: new Date().toISOString(),
+              }
+              messages.value.push(placeholder)
+              isWaiting.value = false
+            }
             replyBuffer.value += d
           },
           onTool: (name, status) => {
             activeTool.value = { name, status }
           },
           onDone: () => {
-            messages.value.push({
-              role: 'assistant',
-              content: replyBuffer.value,
-              timestamp: new Date().toISOString(),
-              toolCalls: toolCalls.map((t) => ({ name: t.name, status: 'done' as const })),
-            })
+            // 空回答（无 delta）时也要落一条 assistant 消息
+            if (!placeholder) {
+              placeholder = {
+                role: 'assistant',
+                content: '',
+                timestamp: new Date().toISOString(),
+              }
+              messages.value.push(placeholder)
+            }
+            placeholder.content = replyBuffer.value
+            placeholder.toolCalls = toolCalls.map((t) => ({ name: t.name, status: 'done' as const }))
             history.value.push({
               role: 'assistant',
               content: replyBuffer.value,
@@ -106,16 +126,18 @@ export const useAgentStore = defineStore('agent', () => {
             })
             replyBuffer.value = ''
             activeTool.value = null
+            isWaiting.value = false
             isStreaming.value = false
             streamHandle = null
           },
         },
       )
     } catch {
-      // 请求失败（拦截器已 ElMessage 提示）：保留用户消息，复位流式状态
+      // 请求失败（拦截器已 ElMessage 提示）：保留用户消息，复位流式与等待态
       replyBuffer.value = ''
       activeTool.value = null
       isStreaming.value = false
+      isWaiting.value = false
       streamHandle = null
     }
   }
@@ -128,6 +150,7 @@ export const useAgentStore = defineStore('agent', () => {
     }
     replyBuffer.value = ''
     activeTool.value = null
+    isWaiting.value = false
     messages.value = mockInitialMessages.map((m) => ({ ...m }))
     history.value = []
   }
@@ -140,7 +163,13 @@ export const useAgentStore = defineStore('agent', () => {
       isStreaming.value = false
       replyBuffer.value = ''
       activeTool.value = null
+      // 移除未产出内容的占位消息（中止时不留空气泡）
+      const last = messages.value[messages.value.length - 1]
+      if (last && last.role === 'assistant' && !last.content) {
+        messages.value.pop()
+      }
     }
+    isWaiting.value = false
   }
 
   function loadHistory(): void {
@@ -151,6 +180,7 @@ export const useAgentStore = defineStore('agent', () => {
   return {
     messages,
     isStreaming,
+    isWaiting,
     history,
     activeTool,
     replyBuffer,

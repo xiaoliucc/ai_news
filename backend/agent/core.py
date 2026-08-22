@@ -158,7 +158,7 @@ async def chat(
         messages.extend(history)
     messages.append({"role": "user", "content": message})
 
-    for _ in range(MAX_TOOL_CALLS):
+    for turn in range(MAX_TOOL_CALLS):
         replay = await asyncio.to_thread(
             client.chat.completions.create,
             model=_model_id(),
@@ -166,11 +166,21 @@ async def chat(
             tools=tools.TOOLS,
         )
         if not _has_tool_calls(replay):
-            return replay.choices[0].message.content or "暂无内容。"
+            content = replay.choices[0].message.content or "暂无内容。"
+            logger.info("Agent 完成: %d 轮工具循环, 回复 %d 字", turn, len(content))
+            return content
 
         tool_calls = replay.choices[0].message.tool_calls
         if not tool_calls:
-            return replay.choices[0].message.content or "暂无内容。"
+            content = replay.choices[0].message.content or "暂无内容。"
+            logger.info("Agent 完成: %d 轮工具循环, 回复 %d 字", turn, len(content))
+            return content
+
+        logger.info(
+            "Agent 第 %d 轮调用工具: %s",
+            turn + 1,
+            ", ".join(c.function.name for c in tool_calls),
+        )
 
         # 追加 assistant 消息（含 tool_calls）
         messages.extend(_tool_call_messages(replay))
@@ -186,4 +196,5 @@ async def chat(
                 "content": result,
             })
 
+    logger.warning("Agent 工具循环超过 %d 轮上限", MAX_TOOL_CALLS)
     return "LLM 调用工具次数过多，请简化问题后重试。"

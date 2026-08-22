@@ -82,7 +82,7 @@ ChromaDB with `PersistentClient` and SentenceTransformer embeddings (`paraphrase
 
 ### LLM integration (`src/pipeline/llm.py`)
 
-LLM is accessed via **OpenAI-compatible endpoint** (DeepSeek by default, configurable via `.env`). Key design: **graceful degradation** — when the LLM is unavailable, AI relevance judgment falls back to keyword matching (`filters.py`), and quality scoring returns `None`.
+LLM is accessed via **OpenAI-compatible endpoint** (qwen-turbo via DashScope by default, configurable via `.env`). `_build_client()` auto-selects the API key by base_url: DashScope → `DASHSCOPE_API_KEY`, otherwise → `DEEPSEEK_API_KEY` (optional `OPENAI_API_KEY` override). Key design: **graceful degradation** — when the LLM is unavailable, AI relevance judgment falls back to keyword matching (`filters.py`), and quality scoring returns `None`. `_chat_json` retries transient errors (connection/timeout/5xx/429) with exponential backoff.
 
 ### Database (`backend/database.py`)
 
@@ -103,7 +103,7 @@ APScheduler `AsyncIOScheduler` with interval job. `start()` is idempotent — fi
 
 ## Current project phase
 
-Phases 0-4 complete; Phase 5 all three batches complete (quality + memory P1, source toggles + RSS, frontend integration + optimization). `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Frontend live at `frontend/` (Vue 3 SPA, real API). Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`. Next candidates: deployment (Docker / GitHub Actions), memory P2, more Chinese sources.
+Phases 0-4 complete; Phase 5 all three batches complete (quality + memory P1, source toggles + RSS, frontend integration + optimization). `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Frontend live at `frontend/` (Vue 3 SPA, real API). Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`. Next candidates: deployment (Docker / GitHub Actions), memory P2, more Chinese sources, Agent 真流式（SSE）改造（后期计划：当前为前端模拟流式——后端整段返回 `{answer}` + 本地逐字重放 + `inferToolCalls` 猜工具标签，首 token 延迟=全链路；改造涉及 `core.py` 流式消费 + agent 路由 StreamingResponse + 前端增量读取删模拟器，2026-08-20 纳入后期）。
 
 ## Test structure
 

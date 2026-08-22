@@ -10,7 +10,7 @@ import { useI18n } from '@/utils/i18n'
 
 const agentStore = useAgentStore()
 const { t, lang } = useI18n()
-const { messages, isStreaming, activeTool, rounds, maxChars, maxHistory, quickActions } =
+const { messages, isStreaming, isWaiting, activeTool, rounds, maxChars, maxHistory, quickActions } =
   storeToRefs(agentStore)
 
 const input = ref('')
@@ -123,6 +123,12 @@ onBeforeUnmount(() => {
         :streaming="streamView === m"
         :active-tool="streamView === m ? activeTool : undefined"
       />
+
+      <!-- LLM 等待中：转圈 + 正在搜索中（响应返回后切换为流式输出） -->
+      <div v-if="isWaiting" class="apanel__waiting" data-od-id="agent-waiting">
+        <span class="apanel__waiting-spinner" aria-hidden="true"></span>
+        <span class="apanel__waiting-text">{{ t('misc.searching') }}</span>
+      </div>
     </div>
 
     <!-- 快捷操作区 -->
@@ -229,6 +235,33 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 14px 12px;
+}
+
+/* ---------- LLM 等待中指示 ---------- */
+.apanel__waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  color: var(--muted);
+}
+.apanel__waiting-spinner {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 2px solid var(--accent-18);
+  border-top-color: var(--accent);
+  animation: apanel-spin 0.8s linear infinite;
+}
+.apanel__waiting-text {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+@keyframes apanel-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---------- 快捷操作区 ---------- */

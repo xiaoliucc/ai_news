@@ -476,6 +476,10 @@ watch(lang, () => void nextTick(updateIndicator))
   letter-spacing: 1px;
   cursor: pointer;
 }
+/* yellow 主题：提示链接 → 暗金黄 */
+[data-theme='yellow'] .aview__hint-link {
+  color: #e5bd41;
+}
 .aview__hint-link:hover {
   text-decoration: underline;
 }

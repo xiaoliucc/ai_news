@@ -58,6 +58,9 @@ onMounted(() => {
 <style scoped>
 .dash {
   height: 100vh;
+  /* 容器间距两主题统一（原仅 yellow 有 6px，切换主题会跳动） */
+  gap: 6px;
+  padding: 6px;
   background: var(--canvas, var(--bg));
   color: var(--fg);
   overflow: hidden;
@@ -71,6 +74,7 @@ onMounted(() => {
 
 .dash__body {
   height: calc(100vh - var(--topbar-h));
+  gap: 6px;
   overflow: hidden;
 }
 

@@ -145,6 +145,10 @@ onBeforeUnmount(() => {
   padding: 0 16px;
   background: var(--bg);
 }
+/* yellow 主题：顶栏背景灰色 */
+[data-theme='yellow'] .topbar {
+  background: #999;
+}
 
 /* 品牌 */
 .topbar__brand {
@@ -165,7 +169,7 @@ onBeforeUnmount(() => {
   font-family: var(--font-display);
   font-size: 9px;
   letter-spacing: 2.5px;
-  color: var(--muted);
+  color: var(--accent);
   margin-top: 2px;
 }
 

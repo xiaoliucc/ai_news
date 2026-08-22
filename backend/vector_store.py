@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 import threading
 
 from chromadb.utils import embedding_functions
@@ -24,6 +25,9 @@ def _get_embedding_fn():
         SentenceTransformerEmbeddingFunction | None: 嵌入函数实例，初始化失败则 None。
     """
     global _embedding_fn, _embedding_failed
+    # 离线模式兜底：模型已本地缓存，禁止访问 huggingface.co
+    # （网络不可达时每次启动会卡 4s×5 重试；.env 已配 HF_HUB_OFFLINE=1）
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
     if _embedding_fn is not None:
         return _embedding_fn
     if _embedding_failed:

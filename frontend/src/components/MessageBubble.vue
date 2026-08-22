@@ -184,4 +184,16 @@ const toolCalls = computed(() => {
   color: var(--disabled);
   text-align: right;
 }
+
+/* AI 回答中的引用链接：淡蓝色（深/浅底均清晰）。
+   注意：<a> 由 v-html（marked 渲染）动态生成，不带 data-v 属性，
+   必须用 :deep() 穿透 scoped，否则编译成 a[data-v-xxx] 永不命中 */
+.bubble.is-ai :deep(.markdown a) {
+  color: #8ab4f8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bubble.is-ai :deep(.markdown a:hover) {
+  color: #a8c8ff;
+}
 </style>

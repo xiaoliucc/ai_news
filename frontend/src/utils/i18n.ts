@@ -75,6 +75,7 @@ const dict = {
     online: { zh: '在线', en: 'ONLINE' },
     collecting: { zh: '采集中...', en: 'COLLECTING...' },
     calling: { zh: '调用中', en: 'CALLING' },
+    searching: { zh: '正在搜索中', en: 'SEARCHING' },
     done: { zh: '完成', en: 'DONE' },
     never: { zh: '从未', en: 'NEVER' },
     justNow: { zh: '刚刚', en: 'JUST NOW' },

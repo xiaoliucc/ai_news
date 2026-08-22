@@ -264,4 +264,20 @@ function askAi(): void {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+
+/* ============ yellow 主题覆盖 ============ */
+/* 左上角 L 形角标：青色 → 橙色 */
+[data-theme='yellow'] .acard__corner {
+  border-top-color: #f0930ddb;
+  border-left-color: #f0930ddb;
+}
+/* 标签：亮黄字 → 橙字，透明底 */
+[data-theme='yellow'] .acard__tag {
+  color: #e28819;
+  background: rgb(232 226 55 / 0%);
+}
+/* AI 摘要按钮：亮黄字 → 暗黄 */
+[data-theme='yellow'] .acard__ai {
+  color: #d0ca14;
+}
 </style>

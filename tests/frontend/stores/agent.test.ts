@@ -29,20 +29,32 @@ describe('stores/agent', () => {
     expect(mockedChat).not.toHaveBeenCalled()
   })
 
-  it('发送流程：user 消息入列 → 调 API（带历史）→ 流式播放后 assistant 消息入列', async () => {
+  it('发送流程：user 消息入列 → 调 API（带历史）→ 首个字符前保持转圈，之后流式输出', async () => {
     const store = useAgentStore()
-    await store.sendMessage('你好')
+    const pending = store.sendMessage('你好')
 
-    // user 消息立即入列，API 已调用（history 不含本条）
+    // user 消息立即入列，等待态开启（LLM 响应未返回）
     expect(store.messages).toHaveLength(1)
     expect(store.messages[0].role).toBe('user')
+    expect(store.isWaiting).toBe(true)
     expect(mockedChat).toHaveBeenCalledWith('你好', [])
 
-    // 推进流式定时器（工具链 + 正文逐字）
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(store.isStreaming).toBe(false)
+    // API 返回后：正文首个字符未到达，等待态保持（一直转圈）
+    await pending
+    expect(store.isWaiting).toBe(true)
+    expect(store.messages).toHaveLength(1)
+
+    // 推进到正文首个字符（工具链 500ms + 120ms 缓冲 = 620ms，下一 delta ≥636ms）：
+    // 等待态结束，占位气泡入列
+    await vi.advanceTimersByTimeAsync(630)
+    expect(store.isWaiting).toBe(false)
     expect(store.messages).toHaveLength(2)
     expect(store.messages[1].role).toBe('assistant')
+    expect(store.messages[1].content).toBe('') // 占位消息：正文经 replyBuffer 流式渲染
+
+    // 推进流式定时器至完成
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(store.isStreaming).toBe(false)
     expect(store.messages[1].content).toBe('这是回复内容')
     expect(store.messages[1].toolCalls).toBeDefined()
     // history 已记录完整轮次
@@ -54,6 +66,7 @@ describe('stores/agent', () => {
     const store = useAgentStore()
     await store.sendMessage('hello')
     expect(store.isStreaming).toBe(false)
+    expect(store.isWaiting).toBe(false) // 等待态复位
     expect(store.messages).toHaveLength(1) // 仅 user 消息
     expect(store.messages[0].role).toBe('user')
   })

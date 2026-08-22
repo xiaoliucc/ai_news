@@ -149,3 +149,9 @@ uv run pytest -k "dedup"
 | `RSS_FEEDS` | RSS 聚合源列表（逗号分隔），当前含机器之心官方 RSS（免费配额，频繁请求会 429 限流）；其余中文源可填自托管 RSSHub 路由 | 空（不启用） |
 | `COLLECTION_LIMIT` | 每源采集条数 | `20` |
 | `COLLECTION_HOURS` | 定时采集间隔（小时） | `6` |
+
+## 后续计划
+
+- [ ] 部署方案（Docker 编排 / GitHub Actions 自动采集日报）
+- [ ] 更多中文数据源（自托管 RSSHub 后填入 `RSS_FEEDS`）
+- [ ] Agent 对话真流式（SSE）改造（后期）：当前为非流式（后端整段返回，前端本地逐字重放模拟流式）；改造为后端 `StreamingResponse` 逐步推送 token 与工具事件，降低首 token 延迟并展示真实工具进度

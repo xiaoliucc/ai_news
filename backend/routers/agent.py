@@ -87,6 +87,14 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
         interests = profile.get("interests") or []
     reading_history = _resolve_titles(profile.get("reading_history") or [])
 
+    logger.info(
+        "Agent 对话: message=%r history=%d 条 interests=%s reading_history=%d 条",
+        req.message,
+        len(req.history) if req.history else 0,
+        interests,
+        len(reading_history or []),
+    )
+
     # P2 对话归档：history 超过阈值时，最早部分增量合并进摘要存库，
     # 请求只带最近 KEEP_MESSAGES 条（全量历史不再无限膨胀）
     summary = profile.get("conversation_summary") or None
@@ -100,6 +108,13 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
         if new_summary:
             set_profile(conversation_summary=new_summary)
             summary = new_summary
+            logger.info(
+                "对话归档: 压缩 %d 条历史消息进摘要（%d 字）",
+                len(archive_msgs),
+                len(new_summary),
+            )
+        else:
+            logger.warning("对话归档: 摘要生成失败，保留旧摘要仅截断历史")
         # 摘要生成失败：保留旧摘要，仅截断请求历史（优雅降级）
 
     try:
@@ -114,4 +129,5 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
         logger.exception("Agent 对话失败")
         raise HTTPException(status_code=500, detail=f"Agent 调用失败: {exc}") from exc
 
+    logger.info("Agent 回复: %d 字", len(answer))
     return ChatResponse(answer=answer)

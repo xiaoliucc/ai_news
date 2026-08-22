@@ -37,22 +37,28 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 def _build_client() -> OpenAI | None:
     """按 .env 配置构建 OpenAI 兼容客户端。
 
-    优先 DEEPSEEK_API_KEY，其次 OPENAI_API_KEY。缺 key 时返回 None。
+    API key 按 base_url 自动匹配：
+    - DashScope（阿里百炼，qwen 系列）→ DASHSCOPE_API_KEY
+    - 其他（DeepSeek / OpenAI 等）→ DEEPSEEK_API_KEY（可选 OPENAI_API_KEY 覆盖）
 
     Returns:
         OpenAI | None: 配置好的客户端实例，或 key 缺失时返回 None。
     """
-    api_key = os.getenv("DEEPSEEK_API_KEY")
+    base_url = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
+    if "dashscope" in base_url:
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+    else:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if os.getenv("OPENAI_API_KEY"):
+            # 只覆盖 api_key，保留 base_url/timeout
+            api_key = os.environ["OPENAI_API_KEY"]
     if not api_key:
         return None
     kwargs: dict = {
         "api_key": api_key,
-        "base_url": os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),
+        "base_url": base_url,
         "timeout": float(os.getenv("LLM_TIMEOUT", "60")),
     }
-    if os.getenv("OPENAI_API_KEY"):
-        # 只覆盖 api_key，保留 base_url/timeout
-        kwargs["api_key"] = os.environ["OPENAI_API_KEY"]
     return OpenAI(**kwargs)
 
 

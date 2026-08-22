@@ -200,6 +200,15 @@ async function onCollect(): Promise<void> {
   color: var(--bg);
   opacity: 0.85;
 }
+/* yellow 主题：文字色用半透明深黑 #1a1a1a9e（覆盖默认 var(--bg) 墨色） */
+[data-theme='yellow'] .spanel__collect.el-button,
+[data-theme='yellow'] .spanel__collect.el-button:hover,
+[data-theme='yellow'] .spanel__collect.el-button:focus-visible,
+[data-theme='yellow'] .spanel__collect.el-button:active,
+[data-theme='yellow'] .spanel__collect.el-button.is-loading,
+[data-theme='yellow'] .spanel__collect.el-button.is-loading:hover {
+  color: #1a1a1a9e;
+}
 .spanel__icon {
   width: 26px;
   height: 26px;

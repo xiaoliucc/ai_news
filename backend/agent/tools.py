@@ -271,7 +271,9 @@ async def _summarize_articles(args: dict) -> dict:
         "你是一个 AI 内容摘要助手，用简洁中文逐篇概括文章核心内容，标题保留原文。只输出 JSON。",
         json.dumps(payload, ensure_ascii=False)
         + '\n\n{"summaries": [{"id": "文章ID", "summary": "中文概括"}]}',
-        max_tokens=1600,
+        # 推理模型（deepseek-v4-flash）会先输出大量 reasoning_content，
+        # 小预算会被思考占满导致 content 为空——留足 4k 预算
+        max_tokens=4096,
     )
     if content is None:
         return {"error": "LLM 调用失败", "summaries": []}
@@ -313,7 +315,9 @@ async def _analyze_trend(args: dict) -> dict:
         "每个方向用一两句话概括。只输出 JSON。",
         json.dumps({"topic": topic, "articles": articles_text}, ensure_ascii=False)
         + '\n\n{"trends": [{"direction": "方向名称", "summary": "概括", "article_count": N}]}',
-        max_tokens=1200,
+        # 推理模型思考量巨大（实测 30 篇输入 >2048 reasoning tokens 仍未结束），
+        # 小预算会导致 content 为空/JSON 截断——留足 4k 预算
+        max_tokens=4096,
     )
 
     if content is None:

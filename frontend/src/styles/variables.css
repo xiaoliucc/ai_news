@@ -149,6 +149,13 @@
   --el-select-input-color: #E0E2E5;
   --el-select-close-hover-color: #E8E237;
 }
+/* 中间主区卡片：暖白（用户指定 #FFFFFC，稍去蓝更柔和；左栏 .spanel 保持纯白）
+   后声明同特异性覆盖上方共用块的 --surface: #FFFFFF */
+[data-theme='yellow'] .aview,
+[data-theme='yellow'] .tview,
+[data-theme='yellow'] .hview {
+  --surface: #FFFFFC;
+}
 /* 浅色区内 EP 输入控件：文字强制浅色（覆盖 endfield 的 var(--fg) 映射） */
 [data-theme='yellow'] .spanel .el-input__inner,
 [data-theme='yellow'] .aview .el-input__inner,
@@ -200,18 +207,26 @@
 [data-theme='yellow'] body::after {
   content: none;
 }
+/* yellow 主题全局按钮：深墨字 + 浅灰描边；hover 浅底亮黄字 */
+[data-theme='yellow'] .el-button {
+  color: #292c32;
+  border-color: #e5e5e5;
+  --el-button-border-color: #e5e5e5;
+}
+[data-theme='yellow'] .el-button:hover,
+[data-theme='yellow'] .el-button:focus-visible {
+  color: oklch(0.89 0.18 107.39);
+  border-color: rgb(236 237 226);
+  background-color: rgb(236 237 226);
+  outline: none;
+}
 /* 布局：深/浅面板浮于浅灰画布，面板间留 6px 缝隙 */
 [data-theme='yellow'] .layout {
   position: relative;
   z-index: 1;
 }
 [data-theme='yellow'] .dash {
-  gap: 6px;
-  padding: 6px;
   background: var(--canvas);
-}
-[data-theme='yellow'] .dash__body {
-  gap: 6px;
 }
 [data-theme='yellow'] .dash__topbar {
   background: #2B2E32;          /* 顶栏深灰 */
@@ -322,9 +337,9 @@
 [data-theme='yellow'] .el-switch.is-checked .el-switch__core {
   box-shadow: 0 0 4px rgba(232, 226, 55, 0.4);
 }
-/* 顶栏：深灰面板 + 底部亮黄细线 */
+/* 顶栏：中灰面板 + 底部亮黄细线（用户定制 #999） */
 [data-theme='yellow'] .topbar {
-  background: linear-gradient(180deg, #3A3E42, #2B2E32);
+  background: #999;
   border-bottom: 1px solid rgba(232, 226, 55, 0.25);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   position: relative;
@@ -381,6 +396,16 @@
   color: var(--accent);
   border-color: rgba(232, 226, 55, 0.35);
   background: rgba(232, 226, 55, 0.07);
+}
+/* 文章标签（用户定制）：橙色文字 + 透明底（保留亮黄描边；后声明覆盖上方共用规则） */
+[data-theme='yellow'] .acard__tag {
+  color: #e28819;
+  background: rgb(232 226 55 / 0%);
+}
+/* 文章卡片左上 L 形角标（用户定制）：橙描边（原亮黄 var(--accent)） */
+[data-theme='yellow'] .acard__corner {
+  border-top-color: #f0930ddb;
+  border-left-color: #f0930ddb;
 }
 /* 统计块：白卡 + 亮黄左条（浅区） */
 [data-theme='yellow'] .stat {
