@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { ToolName } from '@/types'
 import { useI18n } from '@/utils/i18n'
 
 defineProps<{
-  name: ToolName
+  name: string
   status: 'calling' | 'done'
 }>()
 

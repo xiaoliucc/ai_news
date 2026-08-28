@@ -434,14 +434,21 @@
 /* ============ 视图切换 tab（文章/趋势/热榜）修复 ============
    原实现：矩形容器 + 独立平行四边形指示块 → 斜块盖不满直角矩形角，露出深色三角。
    改为：每个按钮自带斜切背景（选中亮黄 / 未选中深灰），斜边互相咬合无缝；
-   隐藏独立指示块（其 left/width 由组件 JS 计算，display:none 不影响逻辑）。 */
+   隐藏独立指示块（其 left/width 由组件 JS 计算，display:none 不影响逻辑）。
+   2026-08-20 补充：按钮斜切后 28px 高盖不满容器上下边缘，两端露浅色面板背景——
+   容器 overflow:hidden 裁剪 + 按钮高度放大（上下超出被裁平），选中块在矩形内
+   上下完整覆盖、左右保留斜切；容器底色与未选中按钮同色（#323539）视觉一体。 */
 [data-theme='yellow'] html .aview__views {
-  background: transparent;
+  background: #323539;          /* 底与未选中按钮同色，两端裁剪后不突兀 */
+  overflow: hidden;             /* 裁剪按钮上下超出部分，平行四边形在矩形内完整覆盖 */
 }
 [data-theme='yellow'] html .aview__views-indicator {
   display: none;
 }
 [data-theme='yellow'] html .aview__view-btn {
+  height: 40px;                 /* 超出容器（28px），上下尖角被 overflow:hidden 裁平 */
+  margin-top: -6px;             /* 上下各超 6px，垂直居中 */
+  margin-bottom: -6px;
   background: #323539;                    /* 未选中：深炭灰 */
   border-color: rgba(255, 255, 255, 0.12); /* 斜边细分割线（浅色，参考图） */
 }

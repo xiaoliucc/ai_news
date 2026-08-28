@@ -16,6 +16,8 @@ Agent 主循环 — LLM + tool-use 模式（非 LangChain）。
 import asyncio
 import json
 import logging
+import queue
+from types import SimpleNamespace
 
 from . import prompts, tools
 from src.pipeline.llm import _get_client, _model_id
@@ -198,3 +200,260 @@ async def chat(
 
     logger.warning("Agent 工具循环超过 %d 轮上限", MAX_TOOL_CALLS)
     return "LLM 调用工具次数过多，请简化问题后重试。"
+
+
+# ==================== 流式版本（SSE 真流式） ====================
+# 事件协议（yield dict，路由层序列化为 SSE）：
+#   {"type": "tool", "name": "<工具名>", "status": "start"|"done"}
+#   {"type": "token", "text": "<LLM 流式增量>"}
+#   {"type": "done", "answer": "<完整答案>"}
+#   {"type": "error", "message": "<错误描述>"}
+# 工具调用轮次的 LLM 响应不向客户端透出 token（模型输出的是 tool_calls JSON），
+# 只发 tool start/done 事件；最终答案轮边收边发 token —— 首 token 延迟大幅下降。
+
+
+def _build_messages(
+    message: str,
+    history: list[dict] | None,
+    interests: list[str] | None,
+    reading_history: list[str] | None,
+    conversation_summary: str | None,
+) -> list[dict]:
+    """构建 Agent 消息列表（system prompt + history + 用户消息）。
+
+    Args:
+        message: 用户输入文本。
+        history: 对话历史。
+        interests: 用户关注方向。
+        reading_history: 阅读历史标题。
+        conversation_summary: 跨会话摘要。
+
+    Returns:
+        list[dict]: 完整的 chat completion 消息列表。
+    """
+    system_prompt = prompts.build_system_prompt(
+        interests=interests,
+        reading_history=reading_history,
+        conversation_summary=conversation_summary,
+    )
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": message})
+    return messages
+
+
+def _accumulate_stream_chunks(stream) -> tuple[list[str], dict[int, dict]]:
+    """消费同步的 LLM 流式迭代器，累积文本增量与 tool_calls 分段。
+
+    工具调用参数（arguments）可能被拆成多个 delta，按 index 拼接。
+    返回 (文本增量列表, {index: {"id","name","arguments"}})。
+
+    Args:
+        stream: client.chat.completions.create(stream=True) 返回的迭代器。
+
+    Returns:
+        tuple[list[str], dict[int, dict]]: 文本片段列表与工具调用累积结构。
+    """
+    text_parts: list[str] = []
+    tool_acc: dict[int, dict] = {}
+    for chunk in stream:
+        if not getattr(chunk, "choices", None):
+            continue
+        delta = chunk.choices[0].delta
+        if delta is None:
+            continue
+        tool_deltas = getattr(delta, "tool_calls", None)
+        if tool_deltas:
+            for tc in tool_deltas:
+                idx = tc.index if tc.index is not None else 0
+                entry = tool_acc.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                if getattr(tc, "id", None):
+                    entry["id"] = tc.id
+                fn = getattr(tc, "function", None)
+                if fn is not None:
+                    if getattr(fn, "name", None):
+                        entry["name"] = fn.name
+                    if getattr(fn, "arguments", None):
+                        entry["arguments"] += fn.arguments
+            continue
+        content = getattr(delta, "content", None)
+        if content:
+            text_parts.append(content)
+    return text_parts, tool_acc
+
+
+async def _iter_chunks(stream):
+    """异步逐块迭代同步的 LLM 流式迭代器（后台线程桥接）。
+
+    OpenAI SDK 的流式迭代是同步阻塞的（等待网络 chunk），直接 in-loop
+    迭代会卡死 FastAPI 事件循环。通过线程 + 队列把 chunk 逐块送进
+    事件循环，让生成器可以边收边 yield（真流式的关键）。
+
+    Args:
+        stream: 同步的流式 chunk 迭代器。
+
+    Yields:
+        chunk: 原始流式 chunk（带 choices[0].delta）。
+    """
+    loop = asyncio.get_running_loop()
+    q: queue.Queue = queue.Queue()
+
+    def _fill() -> None:
+        try:
+            for chunk in stream:
+                q.put(chunk)
+        finally:
+            q.put(None)
+
+    task = loop.run_in_executor(None, _fill)
+    try:
+        while True:
+            chunk = await loop.run_in_executor(None, q.get)
+            if chunk is None:
+                return
+            yield chunk
+    finally:
+        await task
+
+
+def _tool_calls_to_messages(acc: dict[int, dict]) -> tuple[list[dict], list]:
+    """把累积的工具调用结构转为 assistant 消息 + 可执行对象列表。
+
+    Args:
+        acc: {index: {"id","name","arguments"}}，来自流式累积。
+
+    Returns:
+        tuple[list[dict], list]: (assistant 消息列表, 工具执行对象列表)。
+    """
+    ordered = [acc[i] for i in sorted(acc)]
+    assistant_msg = {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": tc["id"] or f"call_{i}",
+                "type": "function",
+                "function": {"name": tc["name"], "arguments": tc["arguments"] or "{}"},
+            }
+            for i, tc in enumerate(ordered)
+        ],
+    }
+    calls = [
+        SimpleNamespace(
+            id=tc["id"] or f"call_{i}",
+            function=SimpleNamespace(
+                name=tc["name"], arguments=tc["arguments"] or "{}"
+            ),
+        )
+        for i, tc in enumerate(ordered)
+    ]
+    return [assistant_msg], calls
+
+
+async def chat_stream(
+    message: str,
+    history: list[dict] | None = None,
+    interests: list[str] | None = None,
+    reading_history: list[str] | None = None,
+    conversation_summary: str | None = None,
+):
+    """执行一轮 Agent 对话并流式产出事件（SSE 真流式）。
+
+    与 chat() 的差异：每轮 LLM 调用使用 stream=True——
+      - 工具轮：LLM 输出 tool_calls 增量，执行工具，发 tool start/done 事件；
+      - 答案轮：LLM 文本增量边收边发 token 事件。
+    独立工具仍并发执行。
+
+    Args:
+        message: 用户输入文本。
+        history: 对话历史。
+        interests: 用户关注方向。
+        reading_history: 阅读历史标题。
+        conversation_summary: 跨会话摘要。
+
+    Yields:
+        dict: 事件（tool / token / done / error）。
+    """
+    client = _get_client()
+    if client is None:
+        yield {"type": "error", "message": "LLM 未配置，请在 .env 中设置 DEEPSEEK_API_KEY。"}
+        return
+
+    messages = _build_messages(
+        message, history, interests, reading_history, conversation_summary
+    )
+
+    try:
+        for turn in range(MAX_TOOL_CALLS):
+            stream = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=_model_id(),
+                messages=messages,
+                tools=tools.TOOLS,
+                stream=True,
+            )
+            # 答案轮边收边发 token；工具轮累积 tool_calls（不向客户端透出 JSON）
+            text_parts: list[str] = []
+            tool_acc: dict[int, dict] = {}
+            async for chunk in _iter_chunks(stream):
+                if not getattr(chunk, "choices", None):
+                    continue
+                delta = chunk.choices[0].delta
+                if delta is None:
+                    continue
+                tool_deltas = getattr(delta, "tool_calls", None)
+                if tool_deltas:
+                    for tc in tool_deltas:
+                        idx = tc.index if tc.index is not None else 0
+                        entry = tool_acc.setdefault(
+                            idx, {"id": "", "name": "", "arguments": ""}
+                        )
+                        if getattr(tc, "id", None):
+                            entry["id"] = tc.id
+                        fn = getattr(tc, "function", None)
+                        if fn is not None:
+                            if getattr(fn, "name", None):
+                                entry["name"] = fn.name
+                            if getattr(fn, "arguments", None):
+                                entry["arguments"] += fn.arguments
+                    continue
+                content = getattr(delta, "content", None)
+                if content:
+                    text_parts.append(content)
+                    yield {"type": "token", "text": content}
+
+            if not tool_acc:
+                # 答案轮：完整文本 = 已流式转发的增量之和（保持一致）
+                answer = "".join(text_parts) or "暂无内容。"
+                logger.info(
+                    "Agent 流式完成: %d 轮工具循环, 回复 %d 字", turn, len(answer)
+                )
+                yield {"type": "done", "answer": answer}
+                return
+
+            assistant_msgs, calls = _tool_calls_to_messages(tool_acc)
+            names = [c.function.name for c in calls]
+            logger.info("Agent 第 %d 轮调用工具: %s", turn + 1, ", ".join(names))
+
+            # 真实工具事件：开始 → 并发执行 → 全部完成
+            for name in names:
+                yield {"type": "tool", "name": name, "status": "start"}
+
+            messages.extend(assistant_msgs)
+            results = await asyncio.gather(*[_execute_tool(c) for c in calls])
+            for c, result in zip(calls, results):
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": c.id,
+                    "content": result,
+                })
+
+            for name in names:
+                yield {"type": "tool", "name": name, "status": "done"}
+
+        logger.warning("Agent 工具循环超过 %d 轮上限", MAX_TOOL_CALLS)
+        yield {"type": "error", "message": "LLM 调用工具次数过多，请简化问题后重试。"}
+    except Exception as exc:  # noqa: BLE001 — 流中异常以 error 事件告知前端
+        logger.exception("Agent 流式对话失败")
+        yield {"type": "error", "message": f"Agent 调用失败: {exc}"}

@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import scheduler
+from .config import CORS_ORIGINS, PUBLIC_BACKEND_URL, PUBLIC_FRONTEND_URL
 from .routers import agent, articles, collect, sources, stats
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
+    if PUBLIC_BACKEND_URL or PUBLIC_FRONTEND_URL:
+        logger.info(
+            "内网穿透: API=%s / 页面=%s",
+            PUBLIC_BACKEND_URL or "未配置（本地直连）",
+            PUBLIC_FRONTEND_URL or "未配置（本地直连）",
+        )
+    logger.info("CORS 放行: %s", ", ".join(CORS_ORIGINS))
     try:
         scheduler.start()
     except Exception as e:
@@ -39,10 +47,7 @@ app = FastAPI(lifespan=lifespan)
 # ===================== CORS 跨域配置核心 =====================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

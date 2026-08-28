@@ -37,3 +37,41 @@ RSS_FEEDS = [
 # 优先级：系统环境变量 HTTPS_PROXY（若已存在）> .env > 直连。
 # 改动需重启后端生效（启动日志会打印当前网络模式）。
 PROXY_URL = os.getenv("HTTPS_PROXY", "").strip() or None
+
+
+def _normalize_url(value: str) -> str | None:
+    """归一化公网地址：去首尾空白与尾部斜杠，空串返回 None。
+
+    Args:
+        value: .env 中公网地址的原始值。
+
+    Returns:
+        str | None: 清洗后的地址；空值返回 None。
+    """
+    v = value.strip().rstrip("/")
+    return v or None
+
+
+def cors_origins(page_url: str | None) -> list[str]:
+    """CORS 放行名单：本地开发端口 + 可选内网穿透页面地址。
+
+    Args:
+        page_url: 前端页面隧道公网地址（无则 None）。
+
+    Returns:
+        list[str]: 放行 origin 列表。
+    """
+    origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    if page_url:
+        origins.append(page_url)
+    return origins
+
+
+# 内网穿透（cpolar 双隧道——一条隧道只能转发一个本地端口，前后端各一条）：
+#   PUBLIC_BACKEND_URL — 后端 :8000 隧道：前端页面访问 API 的地址（vite.config 注入前端）
+#   PUBLIC_FRONTEND_URL — 前端 :5173 隧道：后端 CORS 放行该 Origin（浏览器请求来源）
+# 留空 = 直连/局域网（前后端互不依赖公网）。修改后需重启后端生效，
+# 启动日志会打印隧道模式。免费版隧道重启后子域可能变化，需同步更新。
+PUBLIC_BACKEND_URL = _normalize_url(os.getenv("PUBLIC_BACKEND_URL", ""))
+PUBLIC_FRONTEND_URL = _normalize_url(os.getenv("PUBLIC_FRONTEND_URL", ""))
+CORS_ORIGINS = cors_origins(PUBLIC_FRONTEND_URL)

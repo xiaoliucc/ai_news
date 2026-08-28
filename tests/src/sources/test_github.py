@@ -11,7 +11,12 @@
 import httpx
 import pytest
 
-from src.sources.github import GitHubSource, _extract_stars_today, _parse_int
+from src.sources.github import (
+    GitHubSource,
+    _extract_stars_today,
+    _merge_dedup,
+    _parse_int,
+)
 
 
 # ── fixture HTML ─────────────────────────────────────────────────────────────
@@ -165,3 +170,104 @@ async def test_fetch_network_error_returns_empty(monkeypatch):
 
     monkeypatch.setattr("src.sources.github.httpx.AsyncClient", FakeClient)
     assert await GitHubSource().fetch(limit=5) == []
+
+
+# ── explore 解析（2026-08-20 新增：整合 github.com/explore 推荐仓库）───────────
+
+EXPLORE_HTML = """<html><body>
+  <div class="d-md-flex">
+    <div>
+      <article class="border rounded color-shadow-small color-bg-subtle">
+        <div class="d-flex tmp-p-3">
+          <div class="col-sm-10 d-flex tmp-mr-3">
+            <h3><a href="/openai/codex">openai / codex</a></h3>
+          </div>
+          <p>Lightweight coding agent for your terminal</p>
+          <span itemprop="programmingLanguage">Rust</span>
+        </div>
+      </article>
+      <article class="border rounded color-shadow-small color-bg-subtle">
+        <div class="d-flex tmp-p-3">
+          <h3><a href="/anthropics/claude-code">anthropics / claude-code</a></h3>
+          <p>Claude Code CLI</p>
+          <span itemprop="programmingLanguage">Go</span>
+        </div>
+      </article>
+    </div>
+    <div>
+      <h3><a href="/topics/database">Database</a></h3>
+      <h3><a href="/collections/pixel-art-tools">Pixel Art Tools</a></h3>
+      <h3><a href="/marketplace/snyk">Snyk</a></h3>
+      <h3><a href="/trending/developers">Trending developers</a></h3>
+    </div>
+  </div>
+</body></html>"""
+
+
+def test_parse_explore_extracts_repos():
+    """explore 解析：只取 owner/repo 仓库，排除 topics/collections/marketplace/trending。"""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    articles = GitHubSource()._parse_explore_html(EXPLORE_HTML, limit=20, published_at=now)
+    ids = [a.id for a in articles]
+    assert ids == ["github_openai/codex", "github_anthropics/claude-code"]
+
+    first = articles[0]
+    assert first.title == "openai/codex"
+    assert first.summary == "Lightweight coding agent for your terminal"
+    assert first.tags == ["Rust"]
+    assert first.score == 0  # explore 无 today 数据，不参与热度量纲
+    assert first.url == "https://github.com/openai/codex"
+    assert first.source == "github"
+    assert first.published_at == now
+
+
+def test_parse_explore_limit():
+    from datetime import datetime, timezone
+
+    articles = GitHubSource()._parse_explore_html(
+        EXPLORE_HTML, limit=1, published_at=datetime.now(timezone.utc)
+    )
+    assert len(articles) == 1
+    assert articles[0].id == "github_openai/codex"
+
+
+def test_parse_explore_empty():
+    assert GitHubSource()._parse_explore_html("<html><body></body></html>", 20) == []
+    assert GitHubSource()._parse_explore_html("", 20) == []
+
+
+# ── 合并去重（trending + explore 整合）────────────────────────────────────────
+
+def _article(article_id: str, score: int):
+    from src.models import Article
+
+    return Article(
+        id=article_id,
+        title=article_id,
+        url=f"https://github.com/{article_id}",
+        source="github",
+        summary=None,
+        author="owner",
+        published_at=None,
+        score=score,
+        tags=[],
+        language="en",
+    )
+
+
+def test_merge_dedup_trending_priority():
+    """重叠仓库保留 trending 版本（有 today 分数），explore 补充不重复仓库。"""
+    trending = [_article("github_openai/codex", 1234), _article("github_a/b", 50)]
+    explore = [_article("github_openai/codex", 0), _article("github_c/d", 0)]
+    merged = _merge_dedup(trending, explore)
+    assert [a.id for a in merged] == ["github_openai/codex", "github_a/b", "github_c/d"]
+    codex = next(a for a in merged if a.id == "github_openai/codex")
+    assert codex.score == 1234  # trending 优先，不被 explore 的 0 覆盖
+
+
+def test_merge_dedup_secondary_only():
+    """trending 为空时 explore 独立成列表。"""
+    merged = _merge_dedup([], [_article("github_only/explore", 0)])
+    assert [a.id for a in merged] == ["github_only/explore"]

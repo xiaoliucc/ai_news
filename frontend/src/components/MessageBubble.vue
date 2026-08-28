@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { marked } from 'marked'
-import type { ChatMessage, ToolName } from '@/types'
+import type { ChatMessage } from '@/types'
 import { formatRelativeTime } from '@/composables/useRelativeTime'
 import ToolCallBadge from '@/components/ToolCallBadge.vue'
 import { useI18n } from '@/utils/i18n'
@@ -12,7 +12,7 @@ const props = defineProps<{
   streamingText?: string
   /** 流式进行中：显示方块光标 */
   streaming?: boolean
-  activeTool?: { name: ToolName; status: 'calling' | 'done' } | null
+  activeTool?: { name: string; status: 'calling' | 'done' } | null
 }>()
 
 const { lang } = useI18n()

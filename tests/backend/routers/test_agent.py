@@ -10,18 +10,32 @@ app.include_router(router)
 client = TestClient(app)
 
 
-# ---------- agent_chat 集成测试 ----------
+def _stream_events(events: list[dict]):
+    """把事件列表包装成 chat_stream 的异步迭代器（mock side_effect 用）。"""
+    async def _gen(*_args, **_kwargs):
+        for ev in events:
+            yield ev
+    return _gen
+
+
+# ---------- agent_chat（SSE 流式）集成测试 ----------
 
 def test_agent_chat_success():
-    """正常对话返回"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """正常对话：SSE 流返回 token + done 事件"""
+    events = [
+        {"type": "token", "text": "找到 3 篇多模态论文"},
+        {"type": "done", "answer": "找到 3 篇多模态论文"},
+    ]
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events(events)) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile:
-        mock_chat.return_value = "找到 3 篇多模态论文"
         mock_profile.return_value = {"interests": []}
 
         resp = client.post("/api/agent/chat", json={"message": "多模态论文有哪些？"})
         assert resp.status_code == 200
-        assert resp.json()["answer"] == "找到 3 篇多模态论文"
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        assert '"type": "token"' in resp.text
+        assert '"type": "done"' in resp.text
+        assert "找到 3 篇多模态论文" in resp.text
 
 
 def test_agent_chat_empty_message():
@@ -54,11 +68,9 @@ def test_agent_chat_history_content_too_long():
 
 
 def test_agent_chat_with_history_and_interests():
-    """传递 history 和 interests 给 chat"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """传递 history 和 interests 给 chat_stream"""
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile", return_value={"interests": [], "conversation_summary": ""}):
-        mock_chat.return_value = "OK"
-
         history = [{"role": "user", "content": "你好"}, {"role": "assistant", "content": "你好！"}]
         resp = client.post("/api/agent/chat", json={
             "message": "继续说",
@@ -66,7 +78,7 @@ def test_agent_chat_with_history_and_interests():
             "interests": ["多模态", "RAG"],
         })
         assert resp.status_code == 200
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="继续说",
             history=history,
             interests=["多模态", "RAG"],
@@ -76,12 +88,11 @@ def test_agent_chat_with_history_and_interests():
 
 
 def test_agent_chat_archives_long_history():
-    """history 超过阈值时：旧轮次压缩进摘要存库，chat 只收到最近 KEEP_MESSAGES 条"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """history 超过阈值时：旧轮次压缩进摘要存库，chat_stream 只收到最近 KEEP_MESSAGES 条"""
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
          patch("backend.routers.agent.summarize_conversation") as mock_summarize, \
          patch("backend.routers.agent.set_profile") as mock_set_profile:
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
         mock_summarize.return_value = "合并后的新摘要"
 
@@ -92,8 +103,8 @@ def test_agent_chat_archives_long_history():
         # 归档调用：旧摘要 + 最早 1 条消息 → 新摘要
         mock_summarize.assert_called_once_with("旧摘要", [history[0]])
         mock_set_profile.assert_called_once_with(conversation_summary="合并后的新摘要")
-        # chat 收到最近 12 条 + 新摘要
-        mock_chat.assert_called_once_with(
+        # chat_stream 收到最近 12 条 + 新摘要
+        mock_stream.assert_called_once_with(
             message="继续",
             history=history[-12:],
             interests=[],
@@ -103,12 +114,11 @@ def test_agent_chat_archives_long_history():
 
 
 def test_agent_chat_short_history_no_archive():
-    """history 未超阈值时不归档，chat 收到全量历史与 profile 摘要"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """history 未超阈值时不归档，chat_stream 收到全量历史与 profile 摘要"""
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
          patch("backend.routers.agent.summarize_conversation") as mock_summarize, \
          patch("backend.routers.agent.set_profile") as mock_set_profile:
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
 
         history = [{"role": "user", "content": "hi"}] * 12
@@ -116,7 +126,7 @@ def test_agent_chat_short_history_no_archive():
         assert resp.status_code == 200
         mock_summarize.assert_not_called()
         mock_set_profile.assert_not_called()
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="hello",
             history=history,
             interests=[],
@@ -127,11 +137,10 @@ def test_agent_chat_short_history_no_archive():
 
 def test_agent_chat_archive_failure_degrades():
     """摘要生成失败时保留旧摘要不存库，对话照常（截断历史）"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
          patch("backend.routers.agent.summarize_conversation", return_value=None) as mock_summarize, \
          patch("backend.routers.agent.set_profile") as mock_set_profile:
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {"interests": [], "conversation_summary": "旧摘要"}
 
         history = [{"role": "user", "content": "hi"}] * 13
@@ -139,7 +148,7 @@ def test_agent_chat_archive_failure_degrades():
         assert resp.status_code == 200
         mock_summarize.assert_called_once()
         mock_set_profile.assert_not_called()  # 未存库
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="hello",
             history=history[-12:],
             interests=[],
@@ -150,14 +159,13 @@ def test_agent_chat_archive_failure_degrades():
 
 def test_agent_chat_falls_back_to_profile_interests():
     """不传 interests 时从 user_profile 读取"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile:
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {"interests": ["CV", "NLP"]}
 
         resp = client.post("/api/agent/chat", json={"message": "hello"})
         assert resp.status_code == 200
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="hello",
             history=None,
             interests=["CV", "NLP"],
@@ -166,23 +174,27 @@ def test_agent_chat_falls_back_to_profile_interests():
         )
 
 
-def test_agent_chat_exception_returns_500():
-    """chat 异常时返回 500"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+def test_agent_chat_stream_error_emits_error_event():
+    """chat_stream 流中抛异常时，以 SSE error 事件兜底（不再整体 500）"""
+    async def _boom(*_args, **_kwargs):
+        yield {"type": "token", "text": "部分内容"}
+        raise RuntimeError("LLM 超时")
+
+    with patch("backend.routers.agent.chat_stream", side_effect=_boom) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile:
-        mock_chat.side_effect = RuntimeError("LLM 超时")
         mock_profile.return_value = {"interests": []}
 
         resp = client.post("/api/agent/chat", json={"message": "test"})
-        assert resp.status_code == 500
+        assert resp.status_code == 200  # SSE 流内错误以事件形式返回
+        assert '"type": "error"' in resp.text
+        assert "Agent 调用失败" in resp.text
 
 
 def test_agent_chat_passes_resolved_reading_history():
-    """profile 有阅读历史时，chat 收到解析后的标题列表"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """profile 有阅读历史时，chat_stream 收到解析后的标题列表"""
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
          patch("backend.routers.agent.get_article") as mock_get_article:
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {
             "interests": [],
             "reading_history": ["arxiv_1", "arxiv_2"],
@@ -194,7 +206,7 @@ def test_agent_chat_passes_resolved_reading_history():
 
         resp = client.post("/api/agent/chat", json={"message": "hello"})
         assert resp.status_code == 200
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="hello",
             history=None,
             interests=[],
@@ -204,11 +216,10 @@ def test_agent_chat_passes_resolved_reading_history():
 
 
 def test_agent_chat_reading_history_all_invalid_passes_none():
-    """阅读历史 ID 全部失效时，chat 收到 None（不注入空段）"""
-    with patch("backend.routers.agent.chat") as mock_chat, \
+    """阅读历史 ID 全部失效时，chat_stream 收到 None（不注入空段）"""
+    with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
          patch("backend.routers.agent.get_article", return_value=None):
-        mock_chat.return_value = "OK"
         mock_profile.return_value = {
             "interests": [],
             "reading_history": ["gone_1"],
@@ -216,7 +227,7 @@ def test_agent_chat_reading_history_all_invalid_passes_none():
 
         resp = client.post("/api/agent/chat", json={"message": "hello"})
         assert resp.status_code == 200
-        mock_chat.assert_called_once_with(
+        mock_stream.assert_called_once_with(
             message="hello",
             history=None,
             interests=[],

@@ -64,6 +64,22 @@ AI_KEYWORDS = [
     "inference",
     "language model",
     "foundation model",
+    # 英文关键词 — GitHub/社区常用 AI 技术词（2026-08-20 扩充，服务 explore 仓库）
+    "model",          # 仓库名含 model 通常即 AI 模型（如 DeepSeek-V3 系列仓库）
+    "api",            # AI 相关 API 项目（如 OpenAI API 封装）
+    "skills",         # Claude Skills / 技能包类仓库
+    "ocr",            # 光学字符识别
+    "mcp",            # Model Context Protocol（AI 工具协议）
+    "workflow",       # AI 工作流（如 n8n/ComfyUI workflow）
+    "coding agent",   # 编程 Agent（如 Cline/Cursor 类）
+    "code agent",
+    "computer use",   # AI 代理操作电脑（如 Claude Computer Use）
+    "multi-agent",    # 多智能体协作
+    "agentic",        # Agentic 编程/工作流
+    "assistant",      # AI 助手
+    "reasoning",      # 推理模型/推理引擎
+    "tool use",       # 工具调用（LLM function calling）
+    "voice",          # 语音 AI
     # 中文关键词
     "大模型",
     "大语言模型",

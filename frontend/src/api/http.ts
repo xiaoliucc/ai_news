@@ -1,6 +1,8 @@
 /* ============================================================
    HTTP 实例 —— axios 封装
-   baseURL '/api'（dev 由 vite proxy 转发到 :8000）
+   baseURL：API 前缀——内网穿透后端隧道（vite.config 注入
+   VITE_API_BASE，已含 /api），为空则本地 '/api'
+   （dev 由 vite proxy 转发到 :8000）
    拦截器：解包 data + 非 2xx 统一 ElMessage 报错
    ============================================================ */
 
@@ -9,8 +11,11 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import 'element-plus/es/components/message/style/css'
 
+// 穿透地址为空时回退本地 /api；有值则跨域直连后端隧道（CORS 已放行前端隧道）
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+
 const http = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   timeout: 120_000, // Agent 对话可能较慢（LLM + 向量检索）
 })
 

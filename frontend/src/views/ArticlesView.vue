@@ -13,7 +13,7 @@ import ArticleCard from '@/components/ArticleCard.vue'
 import TrendsView from '@/views/TrendsView.vue'
 import HotlistView from '@/views/HotlistView.vue'
 import { useI18n } from '@/utils/i18n'
-import type { MainView } from '@/types'
+import type { MainView, SourceName } from '@/types'
 
 const articlesStore = useArticlesStore()
 const layoutStore = useLayoutStore()

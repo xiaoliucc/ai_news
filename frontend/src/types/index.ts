@@ -55,7 +55,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
-  toolCalls?: Array<{ name: ToolName; status: 'calling' | 'done' }>
+  toolCalls?: Array<{ name: string; status: 'calling' | 'done' }>
 }
 
 export type SourceName = 'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss' | 'github'

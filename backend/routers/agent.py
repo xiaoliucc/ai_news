@@ -1,11 +1,13 @@
 
 import asyncio
+import json
 import logging
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
-from backend.agent.core import chat
+from backend.agent.core import chat_stream
 from backend.agent.memory import summarize_conversation
 from backend.database import get_article, get_profile, set_profile
 
@@ -59,22 +61,25 @@ def _resolve_titles(article_ids: list[str]) -> list[str] | None:
     return titles or None
 
 
-@router.post("/agent/chat", response_model=ChatResponse)
-async def agent_chat(req: ChatRequest) -> ChatResponse:
-    """Agent 对话接口。
+@router.post("/agent/chat")
+async def agent_chat(req: ChatRequest) -> StreamingResponse:
+    """Agent 对话接口（SSE 真流式）。
 
     ChromaDB 索引由 scheduler 采集时同步维护，Agent 直接检索即可。
-    无需每次请求重建索引。
+    无需每次请求重建索引。响应为 text/event-stream，事件协议：
+      data: {"type":"tool","name":"...","status":"start"|"done"}  — 真实工具执行
+      data: {"type":"token","text":"..."}                          — LLM 流式增量
+      data: {"type":"done","answer":"..."}                         — 完成
+      data: {"type":"error","message":"..."}                       — 错误
 
     Args:
         req: ChatRequest（message 必填，history / interests 可选）。
 
     Returns:
-        ChatResponse: 包含 LLM 回复文本。
+        StreamingResponse: SSE 事件流。
 
     Raises:
         HTTPException 400: message 为空字符串。
-        HTTPException 500: Agent 调用异常。
     """
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
@@ -88,7 +93,7 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
     reading_history = _resolve_titles(profile.get("reading_history") or [])
 
     logger.info(
-        "Agent 对话: message=%r history=%d 条 interests=%s reading_history=%d 条",
+        "Agent 对话(流式): message=%r history=%d 条 interests=%s reading_history=%d 条",
         req.message,
         len(req.history) if req.history else 0,
         interests,
@@ -115,19 +120,34 @@ async def agent_chat(req: ChatRequest) -> ChatResponse:
             )
         else:
             logger.warning("对话归档: 摘要生成失败，保留旧摘要仅截断历史")
-        # 摘要生成失败：保留旧摘要，仅截断请求历史（优雅降级）
 
-    try:
-        answer = await chat(
-            message=req.message,
-            history=history_for_chat,
-            interests=interests,
-            reading_history=reading_history,
-            conversation_summary=summary,
-        )
-    except Exception as exc:
-        logger.exception("Agent 对话失败")
-        raise HTTPException(status_code=500, detail=f"Agent 调用失败: {exc}") from exc
+    async def event_gen():
+        """把 chat_stream 的事件 dict 序列化为 SSE data 行。"""
+        try:
+            async for ev in chat_stream(
+                message=req.message,
+                history=history_for_chat,
+                interests=interests,
+                reading_history=reading_history,
+                conversation_summary=summary,
+            ):
+                payload = json.dumps(ev, ensure_ascii=False)
+                logger.info("SSE 事件: %s", payload[:120])
+                yield f"data: {payload}\n\n"
+        except Exception as exc:  # noqa: BLE001 — 流中异常以 error 事件兜底
+            logger.exception("Agent 流式对话路由异常")
+            payload = json.dumps(
+                {"type": "error", "message": f"Agent 调用失败: {exc}"},
+                ensure_ascii=False,
+            )
+            yield f"data: {payload}\n\n"
 
-    logger.info("Agent 回复: %d 字", len(answer))
-    return ChatResponse(answer=answer)
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 提示 nginx 等反代不要缓冲 SSE
+        },
+    )

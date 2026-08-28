@@ -1,12 +1,12 @@
 /* ============================================================
-   AGENT STORE —— 对应 POST /api/agent/chat
-   真实 API：后端返回整段 answer，前端保留流式播放模拟
-   （逐字渲染 + 本地推断的工具调用标签，保持视觉体验）
+   AGENT STORE —— POST /api/agent/chat（SSE 真流式）
+   后端流式推送：tool 事件（真实工具执行）+ token 事件（LLM 增量）
+   + done/error。前端实时渲染，不再本地模拟/猜测工具调用。
    ============================================================ */
 
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { chat as apiChat } from '@/api/agent'
+import { chatStream, type ChatStreamHandle } from '@/api/agent'
 import {
   MOCK_MAX_CHARS,
   MOCK_MAX_HISTORY,
@@ -14,33 +14,26 @@ import {
   mockInitialMessages,
   QUICK_ACTIONS,
 } from '@/mock/data'
-import { startStreaming } from '@/mock/streamSimulator'
-import type { ChatMessage, ToolName } from '@/types'
+import type { ChatMessage } from '@/types'
 
-/** 根据用户输入匹配工具调用序列（本地推断，仅用于展示标签；真实调用由后端 Agent 执行） */
-function inferToolCalls(text: string): Array<{ name: ToolName; delay: number }> {
-  const calls: Array<{ name: ToolName; delay: number }> = []
-  if (/趋势|trend|热点|research/i.test(text)) calls.push({ name: 'ANALYZE_TREND', delay: 500 })
-  if (/采集|collect|trigger/i.test(text)) calls.push({ name: 'TRIGGER_COLLECTION', delay: 600 })
-  if (/总结|summar|摘要/i.test(text)) calls.push({ name: 'SUMMARIZE', delay: 450 })
-  if (calls.length === 0) calls.push({ name: 'SEARCH', delay: 500 })
-  if (/推荐|论文|paper/i.test(text)) calls.push({ name: 'SUMMARIZE', delay: 450 })
-  return calls
+export interface ActiveTool {
+  name: string
+  status: 'calling' | 'done'
 }
 
 export const useAgentStore = defineStore('agent', () => {
   /* ---------- state ---------- */
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
-  /** 等待后端 LLM 响应中（尚未开始流式播放） */
+  /** 等待后端首帧（工具事件或 token）中 */
   const isWaiting = ref(false)
   const history = ref<ChatMessage[]>([])
-  const activeTool = ref<{ name: ToolName; status: 'calling' | 'done' } | null>(null)
+  const activeTool = ref<ActiveTool | null>(null)
   const replyBuffer = ref('')
   const maxChars = ref(MOCK_MAX_CHARS)
   const maxHistory = ref(MOCK_MAX_HISTORY)
   const quickActions = ref(QUICK_ACTIONS)
-  let streamHandle: { cancel: () => void } | null = null
+  let streamHandle: ChatStreamHandle | null = null
 
   /* ---------- getters ---------- */
   const rounds = computed(() => history.value.length)
@@ -52,7 +45,7 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  /** 发送用户消息 → 后端 Agent 回复（真实 API，流式播放模拟渲染） */
+  /** 发送用户消息 → 后端 Agent 流式回复（真实 token / tool 事件渲染） */
   async function sendMessage(text: string): Promise<void> {
     if (isStreaming.value) return
     const trimmed = text.trim()
@@ -63,9 +56,6 @@ export const useAgentStore = defineStore('agent', () => {
       content: trimmed,
       timestamp: new Date().toISOString(),
     })
-
-    // 本地推断工具标签（展示用；真实工具调用由后端 Agent 循环执行）
-    const toolCalls = inferToolCalls(trimmed)
 
     isStreaming.value = true
     isWaiting.value = true
@@ -78,73 +68,80 @@ export const useAgentStore = defineStore('agent', () => {
     }
     history.value.push({ role: 'user', content: trimmed, timestamp: new Date().toISOString() })
 
-    try {
-      // history 传历史轮次（不含本条），上限由 api 层截断为最近 20 条消息
-      const { answer } = await apiChat(
-        trimmed,
-        history.value.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
-      )
+    // assistant 占位气泡：首个事件（工具或 token）到达时创建并结束等待态
+    let placeholder: ChatMessage | null = null
+    const ensurePlaceholder = (): void => {
+      if (!placeholder) {
+        placeholder = {
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+        }
+        messages.value.push(placeholder)
+        isWaiting.value = false
+      }
+    }
 
-      // 流式播放：首个字符到达前保持等待态（一直转圈）；到达时推入占位
-      // assistant 气泡承载增量文本，等待态结束切换为流式渲染
-      let placeholder: ChatMessage | null = null
-      streamHandle = startStreaming(
-        answer,
-        toolCalls.map((t) => ({ ...t })),
-        {
-          onDelta: (d) => {
-            if (!placeholder) {
-              placeholder = {
-                role: 'assistant',
-                content: '',
-                timestamp: new Date().toISOString(),
-              }
-              messages.value.push(placeholder)
-              isWaiting.value = false
-            }
-            replyBuffer.value += d
-          },
-          onTool: (name, status) => {
-            activeTool.value = { name, status }
-          },
-          onDone: () => {
-            // 空回答（无 delta）时也要落一条 assistant 消息
-            if (!placeholder) {
-              placeholder = {
-                role: 'assistant',
-                content: '',
-                timestamp: new Date().toISOString(),
-              }
-              messages.value.push(placeholder)
-            }
-            placeholder.content = replyBuffer.value
-            placeholder.toolCalls = toolCalls.map((t) => ({ name: t.name, status: 'done' as const }))
-            history.value.push({
-              role: 'assistant',
-              content: replyBuffer.value,
-              timestamp: new Date().toISOString(),
-            })
-            replyBuffer.value = ''
-            activeTool.value = null
-            isWaiting.value = false
-            isStreaming.value = false
-            streamHandle = null
-          },
-        },
-      )
-    } catch {
-      // 请求失败（拦截器已 ElMessage 提示）：保留用户消息，复位流式与等待态
+    const finish = (): void => {
+      streamHandle = null
       replyBuffer.value = ''
       activeTool.value = null
-      isStreaming.value = false
       isWaiting.value = false
-      streamHandle = null
+      isStreaming.value = false
     }
+
+    streamHandle = chatStream(
+      trimmed,
+      history.value.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+      {
+        // 真实工具事件（后端上报）：start 显示 calling，done 短暂停留后随正文推进
+        onTool(name, status) {
+          ensurePlaceholder()
+          activeTool.value = { name, status: status === 'start' ? 'calling' : 'done' }
+        },
+        onToken(delta) {
+          ensurePlaceholder()
+          replyBuffer.value += delta
+        },
+        onDone(answer) {
+          // 空回答（流中无 token）也要落一条 assistant 消息
+          if (!placeholder) {
+            placeholder = {
+              role: 'assistant',
+              content: '',
+              timestamp: new Date().toISOString(),
+            }
+            messages.value.push(placeholder)
+          }
+          placeholder.content = answer || replyBuffer.value
+          history.value.push({
+            role: 'assistant',
+            content: placeholder.content,
+            timestamp: new Date().toISOString(),
+          })
+          finish()
+        },
+        onError(message) {
+          // 无占位（纯错误）时落一条 assistant 错误气泡；有占位则写入错误文本
+          if (!placeholder) {
+            placeholder = {
+              role: 'assistant',
+              content: message,
+              timestamp: new Date().toISOString(),
+            }
+            messages.value.push(placeholder)
+          } else {
+            placeholder.content = `${replyBuffer.value || ''}\n\n> ${message}`
+          }
+          finish()
+        },
+      },
+    )
   }
 
   function clearHistory(): void {
     if (isStreaming.value) {
-      streamHandle?.cancel()
+      streamHandle?.abort()
       streamHandle = null
       isStreaming.value = false
     }
@@ -158,7 +155,7 @@ export const useAgentStore = defineStore('agent', () => {
   /** 中止流式输出（保留已发送消息；组件卸载时调用） */
   function stopStreaming(): void {
     if (isStreaming.value) {
-      streamHandle?.cancel()
+      streamHandle?.abort()
       streamHandle = null
       isStreaming.value = false
       replyBuffer.value = ''
