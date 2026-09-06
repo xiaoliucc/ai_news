@@ -1,0 +1,56 @@
+# ============================================================
+# Daily AI Report — 每日 AI 研究日报
+#   每天 01:07 UTC（09:07 北京时间）自动采集 3 源（HN/ArXiv/HF
+#   论文，CLI 默认源，runner 墙外直连无需代理）→ 生成 markdown
+#   提交到 reports/daily-YYYY-MM-DD.md
+#   可手动触发: Actions 页 Run workflow
+# ============================================================
+name: Daily AI Report
+
+on:
+  schedule:
+    - cron: '7 1 * * *'   # 避开整点峰值
+  workflow_dispatch: {}   # 手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Collect and generate report
+        run: |
+          DATE=$(date -u +%F)
+          mkdir -p reports
+          {
+            echo "# AI 研究日报 — $DATE"
+            echo
+            echo "_自动生成：Hacker News / ArXiv / HuggingFace Papers（关键词 AI 过滤）_"
+            echo
+          } > "reports/daily-$DATE.md"
+          uv run python -m src.main fetch \
+            -s hackernews,arxiv,huggingface_papers \
+            --limit 20 -o markdown -f /tmp/body.md
+          cat /tmp/body.md >> "reports/daily-$DATE.md"
+
+      - name: Commit and push
+        run: |
+          git config user.name "ai-news-bot"
+          git config user.email "ai-news-bot@users.noreply.github.com"
+          git add reports/
+          git diff --cached --quiet || {
+            git commit -m "docs: daily AI report $(date -u +%F)"
+            git push
+          }

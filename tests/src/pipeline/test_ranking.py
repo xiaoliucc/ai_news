@@ -107,3 +107,42 @@ class TestRank:
         b = make_article("b", "B", 0, source="arxiv")
         result = rank([a, b])
         assert len(result) == 2
+
+
+# ── ranking v2：LLM 质量因子 ─────────────────────────────────────────────────
+
+def test_quality_factor_prefers_higher_quality():
+    """同分同源同时间：quality 高者排序靠前。"""
+    now = utc_now()
+    low = make_article("low", "Low", 50, published_at=now)
+    low.quality = 40
+    high = make_article("high", "High", 50, published_at=now)
+    high.quality = 95
+
+    result = rank([low, high])
+    assert result[0].id == "high"  # quality 95 的修正系数更高
+
+
+def test_quality_none_falls_back_v1():
+    """quality 为 None（未评分）时因子 = 1.0，回退 v1 排序。"""
+    now = utc_now()
+    a = make_article("a", "A", 60, published_at=now)          # quality None
+    b = make_article("b", "B", 50, published_at=now)
+    b.quality = 50  # 因子 0.85——与 v1 相比被打折
+
+    result = rank([b, a])
+    # a(60×1.0) vs b(50×0.85=42.5)：None 不受罚，仍按 v1 分序
+    assert result[0].id == "a"
+    assert result[1].id == "b"
+
+
+def test_quality_zero_sinks():
+    """quality=0 因子 0.7 最低修正，沉到同分文章之后。"""
+    now = utc_now()
+    bad = make_article("bad", "Bad", 50, published_at=now)
+    bad.quality = 0
+    normal = make_article("n", "N", 50, published_at=now)  # quality None
+
+    result = rank([normal, bad])
+    assert result[0].id == "n"
+    assert result[1].id == "bad"

@@ -14,6 +14,8 @@ export interface Article {
   published_at: string | null // ISO 8601
   score: number
   tags: string[]
+  /** LLM 质量分 0-100（ranking v2 采集时评分），未评分/旧数据缺省 */
+  quality?: number | null
   language: 'en' | 'zh'
 }
 

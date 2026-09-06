@@ -29,3 +29,4 @@ class Article:
     score: int                  
     tags: list[str]             
     language: str              
+    quality: int | None = None  # LLM 质量分 0-100（ranking v2，未评分 None）

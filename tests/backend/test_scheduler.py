@@ -265,3 +265,27 @@ def test_shutdown_noop_when_not_started():
     """未启动时调用 shutdown 不应报错。"""
     scheduler._scheduler = None
     scheduler.shutdown()  # 不抛异常
+
+
+# ── ranking v2：judge_article 过滤 + quality 写回 ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_filter_ai_related_writes_quality(monkeypatch):
+    """过滤保留的文章带上 LLM 质量分（ranking v2 入库数据）。"""
+    from backend.scheduler import _filter_ai_related
+    from src.models import Article
+
+    arts = []
+    for i, ok in enumerate([True, False, True]):
+        arts.append(Article(
+            id=f"v{i}", title="AI 相关" if ok else "not ai",
+            url=f"https://x/{i}", source="mock", summary=None,
+            author=None, published_at=None, score=1, tags=[], language="en",
+        ))
+    verdicts = iter([(True, 80), (False, 20), (True, None)])
+    monkeypatch.setattr(scheduler.llm, "judge_article", lambda a: next(verdicts))
+
+    kept = await _filter_ai_related(arts)
+    assert [a.id for a in kept] == ["v0", "v2"]
+    assert kept[0].quality == 80
+    assert kept[1].quality is None  # 判相关但 LLM 未给质量分

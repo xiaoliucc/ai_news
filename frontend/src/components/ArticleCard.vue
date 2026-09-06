@@ -51,6 +51,12 @@ function askAi(): void {
       <span class="acard__src" :class="`is-${article.source}`">{{ sourceLabel }}</span>
       <span class="acard__time mono">{{ relTime }}</span>
       <span class="acard__score mono">{{ article.score }}</span>
+      <span
+        v-if="article.quality != null"
+        class="acard__quality mono"
+        :class="{ 'is-high': article.quality >= 75 }"
+        :title="t('misc.qualityLabel')"
+      >Q{{ article.quality }}</span>
       <span class="acard__lang mono">{{ langLabel }}</span>
     </div>
 
@@ -175,6 +181,17 @@ function askAi(): void {
 .acard__lang {
   font-size: 10px;
   color: var(--muted);
+}
+.acard__quality {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+.acard__quality.is-high {
+  color: var(--green);
+}
+.acard__quality:not(.is-high) {
+  opacity: 0.75;
 }
 .acard__score {
   font-size: 11px;

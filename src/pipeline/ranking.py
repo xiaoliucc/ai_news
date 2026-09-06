@@ -102,9 +102,10 @@ def _time_decay(published_at: datetime | None, now: datetime) -> float:
 def rank(articles: list[Article]) -> list[Article]:
     """按复合分降序排序。
 
-    排序公式：final_score = normalized_score × time_decay × source_weight，
-    其中 normalized_score 为同源 min-max 归一化值，time_decay 为指数衰减，
-    source_weight 为源可信度权重（hackernews=1.0, arxiv=0.6, huggingface_papers=0.8）。
+    排序公式（v2）：final_score = normalized_score × time_decay × source_weight
+    × quality_factor，其中 normalized_score 为同源 min-max 归一化值，time_decay
+    为指数衰减，source_weight 为源可信度权重，quality_factor 为 LLM 质量分修正
+    （0.7 + 0.3 × quality/100，未评分 = 1.0 回退 v1）。
 
     Args:
         articles: 待排序的文章列表。
@@ -121,6 +122,8 @@ def rank(articles: list[Article]) -> list[Article]:
     def final_score(a: Article) -> float:
         decay = _time_decay(a.published_at, now)
         weight = SOURCE_WEIGHTS.get(a.source, 1.0)  # 未知源给默认权重
-        return normalized[a.id] * decay * weight
+        # v2 质量因子：LLM 质量分 0-100 → 修正系数 0.7~1.0
+        quality_factor = 1.0 if a.quality is None else 0.7 + 0.3 * a.quality / 100
+        return normalized[a.id] * decay * weight * quality_factor
 
     return sorted(articles, key=final_score, reverse=True)

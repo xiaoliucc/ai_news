@@ -199,3 +199,51 @@ def test_chat_json_all_retries_exhausted(monkeypatch):
     result = llm._chat_json("sys", "user", retries=2)
     assert result is None
     assert calls["n"] == 3  # 首次 + 2 次重试
+
+
+# ── judge_article（ranking v2：单次调用相关性 + 质量分） ─────────────────────
+
+def test_judge_article_llm_returns_relevant_and_quality(monkeypatch):
+    """LLM 成功：返回 (相关, 质量分)，质量分钳制在 0-100。"""
+    from src.models import Article
+
+    def _fake_chat_json(system, user, max_tokens):
+        return '{"relevant": true, "quality_score": 120}'
+
+    monkeypatch.setattr(llm, "_chat_json", _fake_chat_json)
+    article = Article(
+        id="x", title="LLM 新方法", url="https://x", source="arxiv",
+        summary="研究", author=None, published_at=None, score=1,
+        tags=[], language="en",
+    )
+    relevant, quality = llm.judge_article(article)
+    assert relevant is True
+    assert quality == 100  # 120 越界钳制到 100
+
+
+def test_judge_article_not_relevant(monkeypatch):
+    """LLM 判不相关：返回 (False, quality)。"""
+    monkeypatch.setattr(
+        llm, "_chat_json",
+        lambda *a, **k: '{"relevant": false, "quality_score": 30}',
+    )
+    relevant, quality = llm.judge_article(_make_article())
+    assert relevant is False
+    assert quality == 30
+
+
+def test_judge_article_llm_failure_falls_back_keywords(monkeypatch):
+    """LLM 不可用（None）：相关性回退关键词，质量分 None。"""
+    monkeypatch.setattr(llm, "_chat_json", lambda *a, **k: None)
+    relevant, quality = llm.judge_article(_make_article())
+    # _make_article 标题含 AI 关键词 → 回退命中
+    assert relevant is True
+    assert quality is None
+
+
+def test_judge_article_bad_json_falls_back_keywords(monkeypatch):
+    """LLM 输出无法解析：同样回退关键词，质量 None。"""
+    monkeypatch.setattr(llm, "_chat_json", lambda *a, **k: "not json")
+    relevant, quality = llm.judge_article(_make_article())
+    assert relevant is True
+    assert quality is None

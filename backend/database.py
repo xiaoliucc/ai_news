@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS articles (
     score         INTEGER NOT NULL DEFAULT 0,
     tags          TEXT NOT NULL DEFAULT '[]',
     language      TEXT NOT NULL DEFAULT 'en',
+    quality       REAL,
     collected_at  TEXT NOT NULL
 );
 
@@ -82,6 +83,21 @@ def _migrate_user_profile(conn: sqlite3.Connection) -> None:
         logger.info("Migrated user_profile: added conversation_summary column")
 
 
+def _migrate_articles_quality(conn: sqlite3.Connection) -> None:
+    """为已存在的 articles 表补 quality 列（ranking v2 LLM 质量分）。
+
+    Args:
+        conn: 已打开的数据库连接。
+    """
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(articles)").fetchall()
+    }
+    if "quality" not in columns:
+        conn.execute("ALTER TABLE articles ADD COLUMN quality REAL")
+        logger.info("Migrated articles: added quality column")
+
+
 def _get_connection() -> sqlite3.Connection:
     """
     Get a connection to the database.
@@ -98,6 +114,7 @@ def init_db() -> None:
     with _get_connection() as conn:
         conn.executescript(SCHEMA)
         _migrate_user_profile(conn)
+        _migrate_articles_quality(conn)
     logger.info(f"Database initialized at {SQLITE_PATH}")
 
 # 首次导入时自动建表
@@ -171,13 +188,14 @@ def save_articles(
                     a.score,
                     json.dumps(a.tags),
                     a.language,
+                    getattr(a, "quality", None),  # ranking v2；旧数据/桩对象无该字段
                     now_time,
                 ))
             conn.executemany(
                 """INSERT OR REPLACE INTO articles
                    (id, title, url, source, summary, author,
-                    published_at, score, tags, language, collected_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    published_at, score, tags, language, quality, collected_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
     except Exception as e:

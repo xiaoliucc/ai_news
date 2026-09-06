@@ -63,9 +63,13 @@ async def _filter_ai_related(articles: list[Article]) -> list[Article]:
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor(max_workers=_FILTER_WORKERS) as pool:
         verdicts = await asyncio.gather(
-            *(loop.run_in_executor(pool, llm.is_ai_related, a) for a in articles)
+            *(loop.run_in_executor(pool, llm.judge_article, a) for a in articles)
         )
-    kept = [a for a, ok in zip(articles, verdicts) if ok]
+    kept = []
+    for a, (ok, quality) in zip(articles, verdicts):
+        if ok:
+            a.quality = quality  # LLM 失败回退关键词时 quality=None
+            kept.append(a)
     return kept
 
 

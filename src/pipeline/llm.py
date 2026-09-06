@@ -288,3 +288,40 @@ def score_quality(article: Article) -> int | None:
     except Exception:  # noqa: BLE001 — 解析失败视为未打分
         logger.warning("质量打分输出无法解析: %r", content)
         return None
+
+
+def judge_article(article: Article) -> tuple[bool, int | None]:
+    """LLM 单次调用：AI 相关性判断 + 质量打分（ranking v2 入口）。
+
+    采集过滤本来就要对每篇调一次 LLM 判断相关性，合并质量分进同一次
+    调用实现"评分零额外成本"。LLM 不可用/失败时相关性回退关键词表、
+    质量分返回 None（调用方忽略质量因子即回退 v1 公式）。
+
+    Args:
+        article: 待判断的 Article 对象。
+
+    Returns:
+        tuple[bool, int | None]: (是否 AI 相关, 质量分 0-100)。
+    """
+    content = _chat_json(
+        "你是一个 AI 领域内容审核与质量评估专家。判断给定内容是否与人工智能（AI/机器学习/大模型等）相关，"
+        "并综合新颖性、影响力、技术深度、实用性打质量分 0-100。只输出 JSON。",
+        json.dumps(
+            {"title": article.title, "summary": article.summary or ""},
+            ensure_ascii=False,
+        )
+        + '\n\n{"relevant": true/false, "quality_score": 0-100}',
+        # 同 is_ai_related：推理模型需留足 reasoning + JSON 输出预算
+        max_tokens=256,
+    )
+    if content is None:
+        return _keyword_related(article), None
+    try:
+        data = json.loads(_strip_code_fence(content))
+        score = int(data.get("quality_score", -1))
+        # 越界（偶发 101/120）钳制到 0-100；负值视为未输出
+        quality = max(0, min(100, score)) if score >= 0 else None
+        return bool(data["relevant"]), quality
+    except Exception:  # noqa: BLE001 — 解析失败按 LLM 不可用处理
+        logger.warning("LLM 判断+打分输出无法解析: %r", content)
+        return _keyword_related(article), None

@@ -462,3 +462,50 @@ def test_set_profile_conversation_summary_persists(tmp_db):
     # 覆盖写入
     set_profile(conversation_summary="新摘要")
     assert get_profile()["conversation_summary"] == "新摘要"
+
+
+# ── ranking v2：quality 列迁移 + 写读 ────────────────────────────────────────
+
+def test_migrate_adds_quality_column(monkeypatch, tmp_db):
+    """旧库（无 quality 列）init_db 后自动补列。"""
+    import sqlite3 as _sqlite3
+    from backend.config import SQLITE_PATH as db_path
+
+    conn = _sqlite3.connect(str(db_path))
+    conn.execute("DROP TABLE articles")
+    conn.execute(
+        """CREATE TABLE articles (
+            id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL,
+            source TEXT NOT NULL, summary TEXT, author TEXT, published_at TEXT,
+            score INTEGER NOT NULL DEFAULT 0, tags TEXT NOT NULL DEFAULT '[]',
+            language TEXT NOT NULL DEFAULT 'en', collected_at TEXT NOT NULL
+        )"""
+    )
+    conn.commit()
+    conn.close()
+
+    from backend.database import init_db
+    init_db()
+
+    conn = _sqlite3.connect(str(db_path))
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(articles)")}
+    conn.close()
+    assert "quality" in columns
+
+
+def test_save_articles_writes_quality(tmp_db):
+    """Article.quality 入库并可读回；None 存 NULL。"""
+    from src.models import Article
+    from backend.database import query_articles
+
+    def _a(aid: str, quality):
+        return Article(
+            id=aid, title=aid, url=f"https://x/{aid}", source="arxiv",
+            summary=None, author=None, published_at=None, score=10,
+            tags=[], language="en", quality=quality,
+        )
+
+    save_articles([_a("q1", 85), _a("q2", None)], [SourceStats(name="arxiv")], 0)
+    rows = {r["id"]: r for r in query_articles(days=30)}
+    assert rows["q1"]["quality"] == 85
+    assert rows["q2"]["quality"] is None
