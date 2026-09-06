@@ -1,0 +1,23 @@
+# 依赖/构建产物/数据不入镜像
+.git
+.venv
+**/node_modules
+**/dist
+backend/db
+hf-cache
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+__pycache__
+**/__pycache__
+*.pyc
+tests
+项目*.md
+后期讨论事项.md
+README.md
+CLAUDE.md
+Dockerfile
+docker-compose.yml

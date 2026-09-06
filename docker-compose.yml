@@ -1,0 +1,29 @@
+# ============================================================
+# AI Research Intelligence Platform — 单服务部署
+#   启动: docker compose up -d --build
+#   访问: http://localhost:8000 （或 cpolar 穿透宿主 8000 的公网地址）
+#
+# .env 需要的额外配置（墙内环境）:
+#   DOCKER_HTTPS_PROXY=http://host.docker.internal:7890   # 容器经宿主代理采墙外源
+#   HF_CACHE_DIR=绝对路径                                  # 已有模型缓存的机器可复用
+# 墙外部署：两者留空即可（直连，模型首启联网下载一次后缓存在卷中）
+# ============================================================
+services:
+  ai-news:
+    build: .
+    image: ai-news:latest
+    container_name: ai-news
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 覆盖 env_file 的 HTTPS_PROXY：容器内 127.0.0.1 指向容器自身，
+      # 访问宿主代理需用 host.docker.internal（Docker Desktop 内建域名）。
+      # DOCKER_HTTPS_PROXY 留空 = 容器直连（墙外部署）。
+      HTTPS_PROXY: ${DOCKER_HTTPS_PROXY:-}
+    volumes:
+      - ./backend/db:/app/backend/db
+      # 嵌入模型缓存（sentence-transformers ~380MB）
+      - ${HF_CACHE_DIR:-./hf-cache}:/root/.cache/huggingface:ro

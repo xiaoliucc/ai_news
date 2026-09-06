@@ -6,9 +6,11 @@ FastAPI app — API 入口和服务生命周期管理。
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import scheduler
 from .config import CORS_ORIGINS, PUBLIC_BACKEND_URL, PUBLIC_FRONTEND_URL
@@ -70,3 +72,14 @@ async def root():
 async def health_check():
     """健康检查接口，返回服务状态。"""
     return {"status": "ok"}
+
+
+# ===================== 前端静态托管（部署模式） =====================
+# 存在 frontend/dist（Docker 构建产物或本地 npm run build）时托管为根路径，
+# 单端口全栈。注意：Mount "/" 是 catch-all，必须在 /api 路由与 /、/health
+# 等显式路由之后注册（Starlette 按添加顺序匹配），否则静态层会拦截 API 路径。
+# 开发模式（uvicorn --reload + vite dev）无 dist 则不挂载，保持纯 API。
+_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _dist.is_dir():
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")
+    logger.info("已托管前端静态资源: %s", _dist)

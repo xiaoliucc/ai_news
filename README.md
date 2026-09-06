@@ -136,6 +136,28 @@ uv run pytest -m "not integration"
 uv run pytest -k "dedup"
 ```
 
+## Docker 部署（单服务全栈）
+
+一条命令构建并启动（前端 dist + 后端 + 定时采集同一容器，单端口 8000）：
+
+```bash
+docker compose up -d --build
+# 访问 http://localhost:8000（前端页面 + /api 同源）；停止: docker compose down
+```
+
+**前置**：Docker Desktop（Windows/Mac）；`cp .env.example .env` 并按本机填写。
+
+**`.env` 需额外配置的两项**：
+
+| 变量 | 说明 |
+|------|------|
+| `DOCKER_HTTPS_PROXY` | 墙内容器经宿主代理采集墙外源：`http://host.docker.internal:7890`（**宿主 Clash 需开启 Allow LAN**）；墙外部署留空 = 容器直连 |
+| `HF_CACHE_DIR` | 嵌入模型缓存目录（复用本机缓存，如 `C:\Users\you\.cache\huggingface`）；留空 = 首次启动联网下载到 `./hf-cache` |
+
+**卷**：`./backend/db`（SQLite + ChromaDB 数据持久化，与开发模式共用同一库）、模型缓存目录（只读挂载）。
+
+**注意**：部署前先停本机开发服务（8000 端口冲突）；`docker compose up` 后容器内 APScheduler 每 6h 自动采集，采集数据写入宿主的 `backend/db`——开发模式（uv + vite）与 Docker 部署可随时切换共用数据。公网访问复用宿主 cpolar 穿透 8000 端口（`PUBLIC_BACKEND_URL`/`PUBLIC_FRONTEND_URL` 配置不变）。
+
 ## 配置
 
 通过 `.env` 文件配置：
@@ -147,11 +169,15 @@ uv run pytest -k "dedup"
 | `LLM_MODEL_ID` | LLM 模型 ID | `qwen-turbo` |
 | `LLM_BASE_URL` | LLM API 地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `LLM_TIMEOUT` | LLM 请求超时（秒） | `60` |
+| `TAVILY_API_KEY` | Agent web_search 联网搜索 key（采集库外实时信息） | — |
 | `HTTPS_PROXY` | 全局网络代理（墙外源 GitHub/HF 需要）；留空=直连；多设备各自维护 `.env`，改动后重启生效 | 空（直连） |
 | `HF_HUB_OFFLINE` | 嵌入模型离线加载（模型缓存后置 1，避免访问 huggingface.co 卡重试） | `1` |
-| `SQLITE_PATH` | SQLite 数据库路径 | `backend/db/articles.db` |
+| `PUBLIC_BACKEND_URL` / `PUBLIC_FRONTEND_URL` | 内网穿透双隧道（cpolar）：后端 8000 隧道（前端 API 地址）/ 前端 5173 隧道（后端 CORS 放行 Origin）；留空=直连/局域网 | 空 |
+| `DOCKER_HTTPS_PROXY` / `HF_CACHE_DIR` | Docker 部署专用（见上节） | 空 / `./hf-cache` |
+| `SQLITE_PATH` | SQLite 数据库路径 | `backend/db/data.db` |
 | `CHROMA_DIR` | ChromaDB 持久化目录 | `backend/db/chroma` |
 | `RSS_FEEDS` | RSS 聚合源列表（逗号分隔），当前含机器之心官方 RSS（免费配额，频繁请求会 429 限流）；其余中文源可填自托管 RSSHub 路由 | 空（不启用） |
+| `GITHUB_TOPICS` | GitHub topics 活跃榜主题（逗号分隔 slug） | `llm,machine-learning,agent` |
 | `COLLECTION_LIMIT` | 每源采集条数 | `20` |
 | `COLLECTION_HOURS` | 定时采集间隔（小时） | `6` |
 
@@ -159,6 +185,7 @@ uv run pytest -k "dedup"
 
 ## 后续计划
 
-- [ ] 部署方案（Docker 编排 / GitHub Actions 自动采集日报）
+- [x] Docker 部署（2026-09-06：单服务全栈，见上节）
+- [ ] GitHub Actions 自动采集日报（复用 CLI）
 - [ ] 更多中文数据源（自托管 RSSHub 后填入 `RSS_FEEDS`）
-- [ ] Agent 对话真流式（SSE）改造（后期）：当前为非流式（后端整段返回，前端本地逐字重放模拟流式）；改造为后端 `StreamingResponse` 逐步推送 token 与工具事件，降低首 token 延迟并展示真实工具进度
+- [ ] ranking v2（LLM 质量因子）
