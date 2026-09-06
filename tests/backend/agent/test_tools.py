@@ -11,6 +11,7 @@ import json
 import os
 import tempfile
 
+import httpx
 import pytest
 
 from backend.agent import tools
@@ -303,3 +304,121 @@ async def test_search_articles_exact_miss_goes_semantic(tmp_db, monkeypatch):
     result = await tools._search_articles({"query": "大模型 论文", "days": 30})
     assert result["total"] == 1
     assert result.get("fallback") == "keyword"
+
+
+# ── web_search（Tavily 联网搜索） ─────────────────────────────────────────
+
+# Tavily /search 样例响应（含一条缺 title/url 的脏条目，应被过滤）
+_SEARCH_SAMPLE = {
+    "results": [
+        {"title": "标题A", "url": "https://a.example", "content": "内容" * 300},
+        {"title": "", "url": "", "content": "脏条目"},
+        {"title": "标题B", "url": "https://b.example", "content": "x" * 1000},
+    ]
+}
+
+
+class _FakeSearchResp:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class _FakeSearchClient:
+    """假 httpx.AsyncClient：记录请求参数，返回预设 Tavily 响应。"""
+
+    def __init__(self, *args, **kwargs):
+        self.url = None
+        self.body = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, url: str, json: dict | None = None):
+        self.url = url
+        self.body = json
+        return _FakeSearchResp(_SEARCH_SAMPLE)
+
+
+class _FakeSearchClientError(_FakeSearchClient):
+    """网络失败版假客户端。"""
+
+    async def post(self, url: str, json: dict | None = None):
+        raise httpx.ConnectError("network down")
+
+
+@pytest.mark.asyncio
+async def test_web_search_no_key(monkeypatch):
+    """TAVILY_API_KEY 未配置时返回可读错误，不发请求。"""
+    monkeypatch.setattr(tools, "TAVILY_API_KEY", None)
+
+    result = await tools._web_search({"query": "AI 最新进展"})
+    assert "error" in result
+    assert "TAVILY_API_KEY" in result["error"]
+    assert result["results"] == []
+
+
+@pytest.mark.asyncio
+async def test_web_search_success(monkeypatch):
+    """正常搜索：请求携带 key/query/max_results，结果按 max_results 截断。"""
+    monkeypatch.setattr(tools, "TAVILY_API_KEY", "test-key")
+    fake = _FakeSearchClient()
+    monkeypatch.setattr(tools.httpx, "AsyncClient", lambda *a, **kw: fake)
+
+    result = await tools._web_search({"query": "AI agent 最新进展", "max_results": 2})
+
+    assert result["source"] == "tavily"
+    assert result["total"] == 2
+    assert result["results"][0]["title"] == "标题A"
+    # content 截断到 500 字符
+    assert len(result["results"][1]["content"]) == 500
+    # 请求体正确
+    assert fake.body["api_key"] == "test-key"
+    assert fake.body["query"] == "AI agent 最新进展"
+    assert fake.body["max_results"] == 2
+
+
+@pytest.mark.asyncio
+async def test_web_search_defaults_and_clamps(monkeypatch):
+    """max_results 缺省为 5；超界时钳制到 [1, 10]。"""
+    monkeypatch.setattr(tools, "TAVILY_API_KEY", "test-key")
+    fake = _FakeSearchClient()
+    monkeypatch.setattr(tools.httpx, "AsyncClient", lambda *a, **kw: fake)
+
+    await tools._web_search({"query": "x"})
+    assert fake.body["max_results"] == 5
+
+    await tools._web_search({"query": "x", "max_results": 99})
+    assert fake.body["max_results"] == 10
+
+
+@pytest.mark.asyncio
+async def test_web_search_empty_query(monkeypatch):
+    """空 query 返回错误，不发请求。"""
+    monkeypatch.setattr(tools, "TAVILY_API_KEY", "test-key")
+    fake = _FakeSearchClient()
+    monkeypatch.setattr(tools.httpx, "AsyncClient", lambda *a, **kw: fake)
+
+    result = await tools._web_search({"query": "   "})
+    assert "error" in result
+    assert fake.url is None  # 未发起请求
+
+
+@pytest.mark.asyncio
+async def test_web_search_network_error(monkeypatch):
+    """网络失败返回可读错误 + 空结果，不抛出异常。"""
+    monkeypatch.setattr(tools, "TAVILY_API_KEY", "test-key")
+    monkeypatch.setattr(tools.httpx, "AsyncClient", lambda *a, **kw: _FakeSearchClientError())
+
+    result = await tools._web_search({"query": "AI"})
+    assert "error" in result
+    assert "联网搜索失败" in result["error"]
+    assert result["results"] == []

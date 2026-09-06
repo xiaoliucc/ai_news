@@ -38,6 +38,9 @@ RSS_FEEDS = [
 # 改动需重启后端生效（启动日志会打印当前网络模式）。
 PROXY_URL = os.getenv("HTTPS_PROXY", "").strip() or None
 
+# Tavily 联网搜索 API key（Agent web_search 工具用，查询采集库外的实时信息）
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip() or None
+
 
 def _normalize_url(value: str) -> str | None:
     """归一化公网地址：去首尾空白与尾部斜杠，空串返回 None。

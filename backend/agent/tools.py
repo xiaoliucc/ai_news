@@ -8,12 +8,17 @@ Agent 工具集 — LLM 可调用的函数（tool-use）。
 工具实现状态：
     Phase 2：search_articles / get_article_detail / summarize_articles /
              analyze_trend / trigger_collection 全部可用
+    Phase 5+：web_search（Tavily 联网搜索，采集库外实时信息）可用
 """
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 
+import httpx
+
+from backend.config import PROXY_URL, TAVILY_API_KEY
 from backend.database import (
     get_article as db_get_article,
     get_profile as db_get_profile,
@@ -24,7 +29,10 @@ from backend.scheduler import collect_once
 from backend.vector_store import search as vs_search
 from src.pipeline.llm import _chat_json, _strip_code_fence
 
+logger = logging.getLogger(__name__)
+
 MAX_READING_HISTORY = 50  # 阅读历史上限（条）
+TAVILY_URL = "https://api.tavily.com/search"  # Tavily 搜索端点（web_search 工具用）
 
 
 def _record_reading_history(article_ids: list[str]) -> None:
@@ -162,6 +170,27 @@ TOOLS: list[dict] = [
             "name": "trigger_collection",
             "description": "手动触发一次数据采集，立即拉取各源最新内容入库。",
             "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "联网搜索公开网络（Tavily），获取采集库之外的最新/实时信息。用于回答'今天有什么新闻''最新动态''实时事件'这类超出已采集数据范围的问题，或查证库内文章提到的外部事实。返回搜索结果标题/链接/摘要。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "搜索查询词，如：2026 AI agent 最新进展",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "返回结果条数，默认 5，最大 10",
+                    },
+                },
+                "required": ["query"],
+            },
         },
     },
 ]
@@ -388,10 +417,85 @@ async def _trigger_collection(_args: dict) -> dict:
         return {"status": "error", "message": f"采集失败: {e}"}
 
 
+def _parse_search_results(data: dict, max_results: int) -> list[dict]:
+    """从 Tavily 响应中提取搜索结果（纯函数，便于单测）。
+
+    Args:
+        data: Tavily /search 的 JSON 响应。
+        max_results: 最多返回条数。
+
+    Returns:
+        list[dict]: [{title, url, content}, ...]；无结果返回空列表。
+    """
+    results = []
+    for r in data.get("results", []):
+        title = r.get("title") or ""
+        url = r.get("url") or ""
+        if not title and not url:
+            continue
+        results.append({
+            "title": title,
+            "url": url,
+            "content": (r.get("content") or "")[:500],
+        })
+        if len(results) >= max_results:
+            break
+    return results
+
+
+async def _web_search(args: dict) -> dict:
+    """Tavily 联网搜索：查询采集库之外的实时/最新信息。
+
+    Args:
+        args: {"query": str, "max_results"?: int}。
+
+    Returns:
+        dict: {"query": str, "results": [...], "source": "tavily"}
+            或含 error 的 dict。
+    """
+    query: str = (args.get("query") or "").strip()
+    max_results: int = max(1, min(args.get("max_results", 5), 10))
+    if not query:
+        return {"error": "query 不能为空", "results": []}
+    if not TAVILY_API_KEY:
+        return {
+            "error": "TAVILY_API_KEY 未配置，无法联网搜索",
+            "results": [],
+        }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0, proxy=PROXY_URL, follow_redirects=True
+        ) as client:
+            resp = await client.post(
+                TAVILY_URL,
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": query,
+                    "max_results": max_results,
+                    "search_depth": "basic",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:  # noqa: BLE001 — 网络失败返回可读错误，不中断对话
+        logger.warning("Tavily 搜索失败: %s", exc)
+        return {"error": f"联网搜索失败: {exc}", "results": []}
+
+    results = _parse_search_results(data, max_results)
+    return {
+        "query": query,
+        "results": results,
+        "total": len(results),
+        "source": "tavily",
+    }
+
+
 EXECUTOR: dict[str, Callable[[dict], Awaitable[dict]]] = {
     "search_articles": _search_articles,
     "get_article_detail": _get_article_detail,
     "summarize_articles": _summarize_articles,
     "analyze_trend": _analyze_trend,
     "trigger_collection": _trigger_collection,
+    "web_search": _web_search,
 }
