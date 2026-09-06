@@ -164,3 +164,38 @@ async def test_fetch_network_error_returns_empty(monkeypatch):
 
     monkeypatch.setattr("src.sources.csdn.httpx.AsyncClient", FakeClient)
     assert await CsdnSource().fetch(limit=5) == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_client_disables_trust_env(monkeypatch):
+    """CSDN 直连：AsyncClient 必须 trust_env=False。
+
+    回归防护：httpx 默认 trust_env=True 会读取环境 HTTPS_PROXY——Docker 墙内
+    部署（compose 注入 DOCKER_HTTPS_PROXY）会劫持 CSDN 请求到宿主代理，
+    导致国内站采集失败（实测 0 条）。显式禁读环境代理保证始终直连。
+    """
+    captured: dict = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"code": 200, "data": []}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            captured["kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get(self, url, params=None):
+            return FakeResp()
+
+    monkeypatch.setattr("src.sources.csdn.httpx.AsyncClient", FakeClient)
+    await CsdnSource().fetch(limit=5)
+    assert captured["kwargs"].get("trust_env") is False

@@ -75,9 +75,12 @@ class CsdnSource(SourcePlugin):
             async with httpx.AsyncClient(
                 timeout=10.0,
                 follow_redirects=True,
+                # 直连（国内站）：trust_env=False 禁止读取环境 HTTPS_PROXY——
+                # 否则 Docker 墙内部署（compose 注入 DOCKER_HTTPS_PROXY）会把
+                # CSDN 请求劫持到宿主代理，与"国内站直连"意图冲突（已实测复现）
+                trust_env=False,
                 headers={"User-Agent": USER_AGENT},
             ) as client:
-                # 直连（国内站）：不传 proxy，代理仅服务墙外源
                 response = await client.get(
                     HOT_RANK_URL,
                     params={"page": 0, "pageSize": min(limit, 25)},
