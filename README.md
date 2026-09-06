@@ -36,7 +36,8 @@ cd frontend && npm run build
 | ArXiv | cs.AI / cs.CL / cs.CV / cs.LG 等 11 个分类新论文 | 官方 API，免费免认证 |
 | HuggingFace Papers | 每日 AI 论文 + 代码实现 | Hugging Face API（`/api/papers`），免费免认证 |
 | RSS 聚合 | 中文源聚合（RSS/Atom），当前含机器之心官方 RSS | `RSS_FEEDS` 配置（逗号分隔），免费额度限流 |
-| GitHub Trending | 今日热门开源项目（今日新增 star 热度） | 静态页解析（无官方 API），需代理 |
+| GitHub | 热门开源（trending 今日 star + explore 推荐 + topics 活跃榜） | 静态页解析（无官方 API），需代理 |
+| CSDN 热榜 | 中文技术博客热榜（AI / 大模型等） | 博客热榜 JSON 接口，直连 |
 
 ## 项目结构
 
@@ -56,7 +57,8 @@ cd frontend && npm run build
 │       ├── arxiv.py          # ArXiv 论文采集
 │       ├── papers.py         # HuggingFace Papers 采集
 │       ├── rss.py            # 通用 RSS/Atom 聚合（中文源，RSS_FEEDS 配置）
-│       └── github.py         # GitHub Trending（静态页解析，需代理）
+│       ├── github.py         # GitHub（trending/explore/topics 静态页解析，需代理）
+│       └── csdn.py           # CSDN 热榜（JSON 接口，直连）
 ├── backend/                  # FastAPI 后端 + AI Agent
 │   ├── main.py              # FastAPI app（lifespan + CORS + 5 路由）
 │   ├── database.py          # SQLite 数据层（3 表，WAL 模式）
@@ -80,7 +82,9 @@ cd frontend && npm run build
 │       ├── components/      # 7 组件（ArticleCard/MessageBubble 等）
 │       ├── composables/     # useTheme 双主题 + 图表色
 │       └── styles/          # 双主题令牌（cyan 青 / yellow 分栏明暗）+ EP 覆写
-├── tests/                    # 测试（174 用例，镜像 src/ + backend/）
+├── tests/                    # 测试（252 用例，镜像 src/ + backend/）
+├── reports/                    # GitHub Actions 自动日报产物
+├── .github/workflows/          # Actions：daily-report 每日自动采集日报
 ├── pyproject.toml            # uv 项目配置
 └── CLAUDE.md                 # Claude Code 项目指南
 ```
@@ -186,6 +190,6 @@ docker compose up -d --build
 ## 后续计划
 
 - [x] Docker 部署（2026-09-06：单服务全栈，见上节）
-- [ ] GitHub Actions 自动采集日报（复用 CLI）
+- [x] GitHub Actions 自动采集日报（2026-09-06，`.github/workflows/daily-report.yml`，每日 01:07 UTC）
 - [ ] 更多中文数据源（自托管 RSSHub 后填入 `RSS_FEEDS`）
-- [ ] ranking v2（LLM 质量因子）
+- [x] ranking v2（2026-09-06：LLM 质量分采集时合并评分入库，rank() 乘质量因子，卡片 Q 徽章展示）
