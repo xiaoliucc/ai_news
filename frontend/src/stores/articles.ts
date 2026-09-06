@@ -24,6 +24,7 @@ export interface TrendPoint {
   huggingface_papers: number
   rss: number
   github: number
+  csdn: number
 }
 
 export interface TagFreq {
@@ -167,7 +168,7 @@ export const useArticlesStore = defineStore('articles', () => {
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(now - i * DAY_MS)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      points.push({ date: key, hackernews: 0, arxiv: 0, huggingface_papers: 0, rss: 0, github: 0 })
+      points.push({ date: key, hackernews: 0, arxiv: 0, huggingface_papers: 0, rss: 0, github: 0, csdn: 0 })
     }
     const map = new Map(points.map((p) => [p.date, p]))
     for (const a of articles.value) {

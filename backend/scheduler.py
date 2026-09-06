@@ -12,6 +12,7 @@ from src.models import Article
 from src.pipeline import llm
 from src.sources.arxiv import ArxivSource
 from src.sources.base import SourcePlugin
+from src.sources.csdn import CsdnSource
 from src.sources.github import GitHubSource
 from src.sources.hackernews import HackerNewsSource
 from src.sources.papers import HuggingFacePaperSource
@@ -30,6 +31,7 @@ SOURCE_REGISTRY: dict[str, object] = {
     "huggingface_papers": HuggingFacePaperSource,
     "rss": lambda: RSSSource(RSS_FEEDS),
     "github": GitHubSource,
+    "csdn": CsdnSource,
 }
 
 

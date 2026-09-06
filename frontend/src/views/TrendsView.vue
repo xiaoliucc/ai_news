@@ -42,6 +42,7 @@ const SERIES = [
   { name: 'huggingface_papers' },
   { name: 'rss' },
   { name: 'github' },
+  { name: 'csdn' },
 ] as const
 
 /** 时间折线图 */

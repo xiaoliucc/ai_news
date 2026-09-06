@@ -37,7 +37,7 @@ const TIME_RANGES: Array<{ value: 1 | 3 | 7 | 14; label: string }> = [
 
 /** 来源筛选选项（与后端 SOURCE_META 一致，按 category 配色） */
 const sourceOptions = computed(() => {
-  const names: SourceName[] = ['hackernews', 'arxiv', 'huggingface_papers', 'rss', 'github']
+  const names: SourceName[] = ['hackernews', 'arxiv', 'huggingface_papers', 'rss', 'github', 'csdn']
   return names.map((n) => ({ value: n, label: t(`srcLabel.${n}`) }))
 })
 

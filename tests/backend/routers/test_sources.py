@@ -125,6 +125,7 @@ def test_toggle_normalizes_to_all(mock_get_source_stats, mock_profile):
         "arxiv",
         "huggingface_papers",
         "github",
+        "csdn",
     ]
     # 开启最后缺的 rss → 变成全选 → 规范化为 []
     response = client.put("/api/sources/rss", json={"enabled": True})

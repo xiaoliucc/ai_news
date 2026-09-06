@@ -14,6 +14,7 @@ export const ENDFIELD_SERIES_COLORS = {
   huggingface_papers: '#a855f7',
   rss: '#e87a3a',
   github: '#22c55e',
+  csdn: '#E6452A',
 } as const
 
 export type EndfieldSeriesKey = keyof typeof ENDFIELD_SERIES_COLORS

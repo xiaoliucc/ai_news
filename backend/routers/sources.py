@@ -40,6 +40,12 @@ SOURCE_META = [
         "description": "今日热门开源项目（需代理访问）",
         "category": "tech_community",
     },
+    {
+        "name": "csdn",
+        "label": "CSDN 热榜",
+        "description": "中文技术博客热榜（AI / 大模型等，直连访问）",
+        "category": "chinese_media",
+    },
 ]
 
 SOURCE_NAMES = [m["name"] for m in SOURCE_META]

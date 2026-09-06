@@ -19,6 +19,7 @@ const dict = {
     huggingface_papers: { zh: 'HF 论文', en: 'HF PAPERS' },
     rss: { zh: 'RSS 聚合', en: 'RSS 聚合' },
     github: { zh: 'GitHub 趋势', en: 'GITHUB TRENDING' },
+    csdn: { zh: 'CSDN 热榜', en: 'CSDN HOT RANK' },
   },
   stat: {
     totalRuns: { zh: '总采集次数', en: 'TOTAL RUNS' },

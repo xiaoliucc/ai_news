@@ -167,6 +167,10 @@ function askAi(): void {
   color: var(--green);
   border-color: rgba(34, 197, 94, 0.35);
 }
+.acard__src.is-csdn {
+  color: var(--red);
+  border-color: rgba(230, 69, 42, 0.35);
+}
 .acard__time,
 .acard__lang {
   font-size: 10px;
