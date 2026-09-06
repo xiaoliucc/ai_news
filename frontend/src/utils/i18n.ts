@@ -69,6 +69,7 @@ const dict = {
     history: { zh: '历史', en: 'HISTORY' },
     clear: { zh: '清空', en: 'CLEAR' },
     send: { zh: '发送', en: 'SEND' },
+    stop: { zh: '停止', en: 'STOP' },
     prev: { zh: '上一页', en: 'PREV' },
     next: { zh: '下一页', en: 'NEXT' },
   },

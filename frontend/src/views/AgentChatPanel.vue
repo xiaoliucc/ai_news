@@ -58,6 +58,11 @@ function useQuick(prompt: string): void {
   send()
 }
 
+function stop(): void {
+  // 中断流式输出：按钮回到 SEND 态即反馈（保留已产出的气泡）
+  agentStore.stopStreaming()
+}
+
 function onClear(): void {
   agentStore.clearHistory()
   ElMessage.info(t('misc.history') + ' CLEARED')
@@ -165,11 +170,12 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="apanel__send"
-          :disabled="isStreaming || !input.trim() || overLimit"
+          :class="{ 'is-stop': isStreaming }"
+          :disabled="isStreaming ? false : !input.trim() || overLimit"
           data-od-id="agent-send"
-          @click="send"
+          @click="isStreaming ? stop() : send()"
         >
-          {{ t('btn.send') }}
+          {{ isStreaming ? t('btn.stop') : t('btn.send') }}
         </button>
       </div>
       <div class="apanel__hint mono">{{ historyLabel }}</div>
@@ -348,6 +354,18 @@ onBeforeUnmount(() => {
   background: var(--surface-raised);
   color: var(--disabled);
   cursor: not-allowed;
+}
+/* 停止生成态：流式中按钮变为 STOP（警示色），点击中断输出 */
+.apanel__send.is-stop {
+  background: var(--warn);
+  color: #fff;
+}
+.apanel__send.is-stop:hover {
+  background: var(--warn);
+  filter: brightness(0.9);
+}
+.apanel__send.is-stop:active {
+  transform: scale(0.98);
 }
 .apanel__hint {
   margin-top: 6px;
