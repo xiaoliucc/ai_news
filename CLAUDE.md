@@ -33,6 +33,11 @@ uv run python -m src.main fetch -s arxiv,hackernews -o markdown -f daily.md
 # Start the FastAPI backend (with hot reload)
 uv run uvicorn backend.main:app --reload
 
+# Docker single-service deploy (frontend dist + backend + scheduler, port 8000)
+docker compose up -d --build
+# 墙内需 .env 配 DOCKER_HTTPS_PROXY=http://host.docker.internal:7890（Clash 开 Allow LAN）
+# 模型缓存卷：HF_CACHE_DIR 指向本机缓存或留空首次联网下载
+
 # Frontend: install deps, dev server, typecheck, build
 cd frontend && npm install
 cd frontend && npm run dev        # http://localhost:5173, /api proxied to :8000
@@ -103,7 +108,7 @@ APScheduler `AsyncIOScheduler` with interval job. `start()` is idempotent — fi
 
 ## Current project phase
 
-Phases 0-4 complete; Phase 5 all three batches complete (quality + memory P1, source toggles + RSS, frontend integration + optimization). `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Frontend live at `frontend/` (Vue 3 SPA, real API). **Agent 真流式（SSE）已完成（2026-08-28）**：后端 `chat_stream()` 事件流 + 路由 StreamingResponse，前端 fetch 增量读取删模拟器；工具事件真实上报、token 级流式输出（端到端验证：245 事件 = 2 tool + 242 token + 1 done，回答基于真实检索）。Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`. Next candidates: deployment (Docker / GitHub Actions), memory P2, more Chinese sources.
+Phases 0-4 complete; Phase 5 all three batches complete (quality + memory P1, source toggles + RSS, frontend integration + optimization). `user_profile.selected_sources` drives scheduler source selection (empty = all); `PUT /api/sources/{name}` toggles. Frontend live at `frontend/` (Vue 3 SPA, real API). **Agent 真流式（SSE）已完成（2026-08-28）**：后端 `chat_stream()` 事件流 + 路由 StreamingResponse，前端 fetch 增量读取删模拟器；工具事件真实上报、token 级流式输出（端到端验证：245 事件 = 2 tool + 242 token + 1 done，回答基于真实检索）。Note: 机器之心 official RSS is configured in `RSS_FEEDS` (free quota — frequent requests trigger 429 rate-limiting; scheduler's 6h interval is safe, avoid over-using `trigger_collection`). 知乎 needs login, public RSSHub instances are unreliable — additional Chinese sources require a self-hosted RSSHub appended to `RSS_FEEDS`. **第 6 源 CSDN（2026-09-06）**：`src/sources/csdn.py` 博客热榜 JSON 接口（数字字段字符串化需 `_to_int`，直连国内站）；**Docker 部署已完成（2026-09-06）**：单服务全栈（见上 Commands），backend/main.py 在存在 `frontend/dist` 时挂 StaticFiles 托管（Mount 注册在 /api 与 /、/health 之后）。Next candidates: GitHub Actions 自动日报, ranking v2, more Chinese sources.
 
 ## Test structure
 
