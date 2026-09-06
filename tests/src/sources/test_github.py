@@ -13,9 +13,11 @@ import pytest
 
 from src.sources.github import (
     GitHubSource,
+    DEFAULT_TOPICS,
     _extract_stars_today,
     _merge_dedup,
     _parse_int,
+    _resolve_topics,
 )
 
 
@@ -209,7 +211,7 @@ def test_parse_explore_extracts_repos():
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)
-    articles = GitHubSource()._parse_explore_html(EXPLORE_HTML, limit=20, published_at=now)
+    articles = GitHubSource()._parse_repo_page_html(EXPLORE_HTML, limit=20, published_at=now)
     ids = [a.id for a in articles]
     assert ids == ["github_openai/codex", "github_anthropics/claude-code"]
 
@@ -226,7 +228,7 @@ def test_parse_explore_extracts_repos():
 def test_parse_explore_limit():
     from datetime import datetime, timezone
 
-    articles = GitHubSource()._parse_explore_html(
+    articles = GitHubSource()._parse_repo_page_html(
         EXPLORE_HTML, limit=1, published_at=datetime.now(timezone.utc)
     )
     assert len(articles) == 1
@@ -234,8 +236,96 @@ def test_parse_explore_limit():
 
 
 def test_parse_explore_empty():
-    assert GitHubSource()._parse_explore_html("<html><body></body></html>", 20) == []
-    assert GitHubSource()._parse_explore_html("", 20) == []
+    assert GitHubSource()._parse_repo_page_html("<html><body></body></html>", 20) == []
+    assert GitHubSource()._parse_repo_page_html("", 20) == []
+
+
+# ── topics 活跃榜解析（2026-09-06 新增：github.com/topics/{t}?s=updated）───────
+
+TOPIC_HTML = """<html><body>
+  <article class="border rounded color-shadow-small color-bg-subtle tmp-my-4">
+    <h3>
+      <a href="/theYahia">theYahia</a>
+      <a href="/theYahia/yandex-metrika-mcp">theYahia / yandex-metrika-mcp</a>
+    </h3>
+    <p>MCP server for Yandex Metrika</p>
+    <ul>
+      <li>Updated <relative-time datetime="2026-09-06T08:42:01Z" class="no-wrap">Sep 6, 2026</relative-time></li>
+      <li><span itemprop="programmingLanguage">TypeScript</span></li>
+    </ul>
+  </article>
+  <article class="border rounded color-shadow-small color-bg-subtle tmp-my-4">
+    <h3>
+      <a href="/huggingface">huggingface</a>
+      <a href="/huggingface/transformers">huggingface / transformers</a>
+    </h3>
+    <p>Transformers: State-of-the-art ML</p>
+    <ul>
+      <li>Updated <relative-time datetime="2026-08-20T10:00:00Z">Aug 20, 2026</relative-time></li>
+      <li><span itemprop="programmingLanguage">Python</span></li>
+    </ul>
+  </article>
+  <article class="border rounded color-shadow-small color-bg-subtle tmp-my-4">
+    <h3><a href="/topics/llm">llm topic link</a></h3>
+  </article>
+</body></html>"""
+
+
+def test_parse_topic_takes_repo_link_and_uses_updated():
+    """topics 解析：h3 双链接（owner 页 + 仓库）取仓库链接；活跃时间优先于采集时刻。"""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    articles = GitHubSource()._parse_repo_page_html(
+        TOPIC_HTML, limit=20, published_at=now, use_updated=True
+    )
+    ids = [a.id for a in articles]
+    assert ids == ["github_theYahia/yandex-metrika-mcp", "github_huggingface/transformers"]
+
+    first = articles[0]
+    assert first.title == "theYahia/yandex-metrika-mcp"
+    assert first.summary == "MCP server for Yandex Metrika"
+    assert first.tags == ["TypeScript"]
+    assert first.score == 0  # 与 explore 同语义：无 today 数据
+    # published_at 取行内 relative-time 的真实活跃时间（UTC），而非采集时刻
+    assert first.published_at.isoformat() == "2026-09-06T08:42:01+00:00"
+    assert articles[1].published_at.isoformat() == "2026-08-20T10:00:00+00:00"
+    # topics/llm 等单段或排除前缀的链接行被跳过
+    assert len(articles) == 2
+
+
+def test_parse_topic_limit():
+    from datetime import datetime, timezone
+
+    articles = GitHubSource()._parse_repo_page_html(
+        TOPIC_HTML, limit=1, published_at=datetime.now(timezone.utc), use_updated=True
+    )
+    assert len(articles) == 1
+    assert articles[0].id == "github_theYahia/yandex-metrika-mcp"
+
+
+def test_parse_topic_uses_collected_at_when_no_updated():
+    """行内无 relative-time（或日期非法）时回退采集时刻。"""
+    from datetime import datetime, timezone
+
+    html = """<html><body>
+      <article class="border rounded">
+        <h3><a href="/foo/bar">foo / bar</a></h3>
+        <p>desc</p>
+        <ul><li>Updated</li></ul>
+      </article>
+    </body></html>"""
+    now = datetime(2026, 9, 6, 3, 0, tzinfo=timezone.utc)
+    articles = GitHubSource()._parse_repo_page_html(html, limit=10, published_at=now, use_updated=True)
+    assert len(articles) == 1
+    assert articles[0].published_at == now
+
+
+def test_resolve_topics():
+    """GITHUB_TOPICS 解析：逗号分隔 + 去空白小写；空配置回退内置默认主题。"""
+    assert _resolve_topics(" llm ,agents,RAG ") == ("llm", "agents", "rag")
+    assert _resolve_topics("") == DEFAULT_TOPICS
+    assert _resolve_topics("  ,  ") == DEFAULT_TOPICS
 
 
 # ── 合并去重（trending + explore 整合）────────────────────────────────────────

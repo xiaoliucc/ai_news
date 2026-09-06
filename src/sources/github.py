@@ -1,21 +1,23 @@
-"""GitHub 数据源 — 解析 github.com/trending 与 github.com/explore 页面。
+"""GitHub 数据源 — 解析 github.com/trending / explore / topics 页面。
 
-GitHub 无官方 trending/explore API；两页均为服务端渲染的静态 HTML。
+GitHub 无官方 trending/explore/topics API；页面均为服务端渲染的静态 HTML。
 - trending 页：每个仓库一个 `<article class="Box-row">`，热度取"今日新增 star"
   （趋势最直接指标），解析失败时回退总 star 数。
 - explore 页：推荐仓库区块（`article.border.rounded.color-bg-subtle` 容器），
   无 "stars today" 数据，score 置 0（避免与 trending 的 today 量纲混用霸榜），
-  作为 trending 的覆盖面补充。两页结果按仓库 id 合并去重，trending 优先。
+  作为 trending 的覆盖面补充。
+- topics 页：AI 主题仓库榜（`?o=desc&s=updated` 按最近活跃排序，每天有变化），
+  与 explore 同语义 score=0；行内 `relative-time[datetime]` 提供真实活跃时间，
+  published_at 取其值（解析失败回退采集时刻）。
+trending 为主列表，explore / topics 按仓库 id 合并去重补充，trending 优先。
 
 注意：github.com 在当前网络环境直连不可达，需配置代理
 （.env 的 HTTPS_PROXY，由 backend.config / src.sources.base 统一读取）。
-
-时间戳：两页均不含发布时间，但语义上榜单就是"今天"的数据——
-published_at 设为采集时刻，保证卡片时间显示与排序时间衰减正确。
 """
 
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime, timezone
 
@@ -29,6 +31,11 @@ logger = logging.getLogger(__name__)
 
 TRENDING_URL = "https://github.com/trending?since=daily"
 EXPLORE_URL = "https://github.com/explore"
+# topics 页 URL：?o=desc&s=updated 按最近活跃排序（每天真实变化，区别于 trending 顶部稳定）
+TOPIC_URL_TMPL = "https://github.com/topics/{topic}?o=desc&s=updated"
+
+# 默认采集的 AI 相关主题（.env GITHUB_TOPICS 可覆盖，逗号分隔）
+DEFAULT_TOPICS = ("llm", "machine-learning", "agent")
 
 # 静态页面需要常规浏览器 UA，避免被识别为爬虫
 USER_AGENT = (
@@ -61,45 +68,79 @@ _NON_REPO_PREFIXES = (
 )
 
 
-class GitHubSource(SourcePlugin):
-    """GitHub 热门仓库采集器（Trending + Explore 推荐整合）。
+def _resolve_topics(raw: str) -> tuple[str, ...]:
+    """解析 GITHUB_TOPICS 配置：逗号分隔的 topic slug 列表。
 
-    解析 https://github.com/trending 与 https://github.com/explore 两个页面，
-    取仓库列表合并去重：trending 的"今日新增 star"仓库为主，explore 的推荐
-    仓库为覆盖面补充。trending 页每页约 25 条，limit 截断取前 N。
+    Args:
+        raw: .env GITHUB_TOPICS 原始值（如 "llm,agents,rag"）。
+
+    Returns:
+        tuple[str, ...]: 清洗后的 topic slug；配置为空时用内置默认主题。
+    """
+    configured = tuple(t.strip().lower() for t in raw.split(",") if t.strip())
+    return configured or DEFAULT_TOPICS
+
+
+# 待采集的主题列表（.env GITHUB_TOPICS 可覆盖；backend 进程由 load_dotenv 注入）
+TOPICS = _resolve_topics(os.getenv("GITHUB_TOPICS", ""))
+
+
+class GitHubSource(SourcePlugin):
+    """GitHub 热门仓库采集器（Trending + Explore + Topics 整合）。
+
+    解析 trending / explore / 各 topic 页面取仓库列表合并去重：
+    trending 的"今日新增 star"仓库为主，explore 推荐与 topics 活跃仓库
+    为覆盖面补充。trending 页每页约 25 条；coverage 页返回数量受
+    fetch 总配额（limit + 1/3 limit）控制，保证覆盖面有可见贡献。
     """
 
     name = "github"
 
     async def fetch(self, limit: int = 20) -> list[Article]:
-        """并发抓取 Trending 与 Explore 页面并合并为 Article 列表。
+        """并发抓取 Trending / Explore / Topics 页面并合并为 Article 列表。
 
         Args:
-            limit: 最多返回的仓库条数。
+            limit: 主列表（trending）的条数上限；coverage 页配额为 limit//3。
 
         Returns:
-            list[Article]: 合并去重后的仓库列表；两页均失败返回空列表。
+            list[Article]: 合并去重后的仓库列表；全部页面失败返回空列表。
         """
         headers = {"User-Agent": USER_AGENT}
         now = datetime.now(timezone.utc)
+        urls = [TRENDING_URL, EXPLORE_URL] + [
+            TOPIC_URL_TMPL.format(topic=t) for t in TOPICS
+        ]
         async with httpx.AsyncClient(
             timeout=10.0,
             proxy=PROXY_URL,
             follow_redirects=True,
             headers=headers,
         ) as client:
-            trending_html, explore_html = await asyncio.gather(
-                self._safe_get(client, TRENDING_URL),
-                self._safe_get(client, EXPLORE_URL),
+            pages = await asyncio.gather(
+                *[self._safe_get(client, url) for url in urls]
             )
 
         articles: list[Article] = []
-        if trending_html is not None:
-            articles.extend(self._parse_html(trending_html, limit, now))
-        if explore_html is not None:
-            explore = self._parse_explore_html(explore_html, limit, now)
-            articles = _merge_dedup(articles, explore)
-        return articles[:limit]
+        # 主列表（trending）截 limit；coverage 页（explore + topics）各截 limit//3
+        if pages[0] is not None:
+            articles.extend(self._parse_html(pages[0], limit, now))
+        cov_limit = max(limit // 3, 3)
+        if pages[1] is not None:
+            # explore 推荐页：无活跃时间，回退采集时刻
+            articles = _merge_dedup(
+                articles,
+                self._parse_repo_page_html(pages[1], cov_limit, now, use_updated=False),
+            )
+        for page in pages[2:]:
+            if page is None:
+                continue
+            # topics 活跃榜：行内 relative-time 提供真实活跃时间
+            articles = _merge_dedup(
+                articles,
+                self._parse_repo_page_html(page, cov_limit, now, use_updated=True),
+            )
+        # 总配额 = limit + coverage 单页配额——保证补充页在 trending 满量时仍有可见贡献
+        return articles[: limit + cov_limit]
 
     @staticmethod
     async def _safe_get(client: httpx.AsyncClient, url: str) -> str | None:
@@ -186,23 +227,27 @@ class GitHubSource(SourcePlugin):
                 break
         return articles
 
-    def _parse_explore_html(
+    def _parse_repo_page_html(
         self,
         html: str,
         limit: int,
         published_at: datetime | None = None,
+        use_updated: bool = False,
     ) -> list[Article]:
-        """从 explore 页面 HTML 解析推荐仓库列表（纯函数，便于单测）。
+        """从仓库列表页 HTML 解析仓库列表（explore 推荐 / topics 活跃榜通用）。
 
         explore 页内容混杂（topics / collections / marketplace / blog 等），
-        只提取仓库链接（/owner/repo 形式且排除非仓库前缀），描述与主语言
-        取自仓库卡片容器（h3 的祖先 article）。explore 无 "stars today"，
-        score 置 0——避免与 trending 的 today 量纲混用导致老牌大仓库霸榜。
+        topics 页每行一个仓库卡片——两页的仓库链接都在 h3 内。两页均无
+        "stars today"，score 置 0——避免与 trending 的 today 量纲混用导致
+        老牌大仓库霸榜。use_updated=True 时（topics 页）取行内
+        `relative-time[datetime]` 的真实活跃时间作为 published_at，
+        保证 1d/3d/7d 时间窗口与时间衰减反映"最近活跃"而非采集时刻。
 
         Args:
-            html: explore 页面 HTML 文本。
+            html: 列表页 HTML 文本。
             limit: 最多返回条数。
-            published_at: 发布时间（采集时刻）。
+            published_at: 回退发布时间（explore 无日期，用采集时刻）。
+            use_updated: True 时优先取行内 relative-time 的活跃时间。
 
         Returns:
             list[Article]: 解析出的仓库列表；无有效仓库返回空列表。
@@ -211,9 +256,36 @@ class GitHubSource(SourcePlugin):
         articles: list[Article] = []
         seen: set[str] = set()
         for h3 in soup.select("h3"):
-            link = h3.select_one("a[href]")
-            if link is None:
+            repo = self._repo_article_from_h3(h3, published_at, use_updated)
+            if repo is None or repo.id in seen:
                 continue
+            seen.add(repo.id)
+            articles.append(repo)
+            if len(articles) >= limit:
+                break
+        return articles
+
+    def _repo_article_from_h3(
+        self,
+        h3,
+        published_at: datetime | None,
+        use_updated: bool,
+    ) -> Article | None:
+        """从含仓库链接的 h3 元素构造 Article（纯函数，便于单测）。
+
+        h3 内可能含多个链接（owner 用户页 + 仓库页，如 topics 行），
+        取第一个符合 owner/repo 两段形式的仓库链接；描述/主语言/活跃时间
+        从 h3 向上的 article 卡片容器提取。
+
+        Args:
+            h3: BeautifulSoup 的 h3 元素。
+            published_at: 回退发布时间（采集时刻）。
+            use_updated: True 时优先取行内 relative-time 的活跃时间。
+
+        Returns:
+            Article | None: 构造的仓库文章；h3 无有效仓库链接返回 None。
+        """
+        for link in h3.select("a[href]"):
             href = (link.get("href") or "").strip()
             stripped = href.strip("/")
             parts = stripped.split("/")
@@ -223,38 +295,37 @@ class GitHubSource(SourcePlugin):
                 continue
             owner, repo = parts[0], parts[1]
 
-            article_id = f"github_{owner}/{repo}"
-            if article_id in seen:
-                continue
-            seen.add(article_id)
-
-            # 仓库卡片容器：h3 向上找 article（推荐卡片或 Box-row 皆可）
             card = h3.find_parent("article")
             description = None
             language = None
+            updated_at = published_at
             if card is not None:
                 desc_el = card.select_one("p")
                 description = desc_el.get_text(strip=True) if desc_el else None
                 lang_el = card.select_one('span[itemprop="programmingLanguage"]')
                 language = lang_el.get_text(strip=True) if lang_el else None
+                if use_updated:
+                    rel = card.select_one("relative-time[datetime]")
+                    if rel is not None:
+                        raw = (rel.get("datetime") or "").replace("Z", "+00:00")
+                        try:
+                            updated_at = datetime.fromisoformat(raw)
+                        except ValueError:
+                            pass  # 日期格式异常时回退采集时刻
 
-            articles.append(
-                Article(
-                    id=article_id,
-                    title=f"{owner}/{repo}",
-                    url=f"https://github.com/{owner}/{repo}",
-                    source=self.name,
-                    summary=description,
-                    author=owner,
-                    published_at=published_at,
-                    score=0,  # explore 无 today 数据，避免量纲混用
-                    tags=[language] if language else [],
-                    language="en",
-                )
+            return Article(
+                id=f"github_{owner}/{repo}",
+                title=f"{owner}/{repo}",
+                url=f"https://github.com/{owner}/{repo}",
+                source=self.name,
+                summary=description,
+                author=owner,
+                published_at=updated_at,
+                score=0,  # 无 today 数据，避免量纲混用
+                tags=[language] if language else [],
+                language="en",
             )
-            if len(articles) >= limit:
-                break
-        return articles
+        return None
 
 
 def _extract_stars_today(text: str) -> int | None:
