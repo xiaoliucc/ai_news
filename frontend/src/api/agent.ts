@@ -50,12 +50,16 @@ export function chatStream(
 
   void (async () => {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      }
+      // 可选 API 门禁 Token（与后端 config.API_TOKEN 同源）：空 = 本机模式不带头
+      const token = import.meta.env.VITE_API_TOKEN || ''
+      if (token) headers['X-API-Token'] = token
       const res = await fetch(`${API_BASE}/agent/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-        },
+        headers,
         // 后端 history 上限 20 条消息（≈ 最近 10 轮），此处兜底截断
         body: JSON.stringify({ message, history: history.slice(-20) }),
         signal: controller.signal,

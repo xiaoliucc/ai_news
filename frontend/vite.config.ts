@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
   const backendUrl = (env.PUBLIC_BACKEND_URL || '').trim().replace(/\/+$/, '')
   // 后端路由挂在 /api 前缀下：隧道根地址需拼 /api（防重复后缀）
   const apiBase = backendUrl ? `${backendUrl.replace(/\/api$/i, '')}/api` : '/api'
+  // 可选 API 门禁 Token：与 backend/config.py 的 API_TOKEN 同源（同一 .env），
+  // 注入前端供 axios/fetch 统一带 X-API-Token 头；留空 = 本机模式不带头。
+  const apiToken = (env.API_TOKEN || '').trim()
 
   // 内网穿透前端隧道域名：cpolar 等外部域名不在 Vite 默认 host 白名单
   // （DNS rebinding 防护，仅放行 localhost），需显式放行才能经隧道访问。
@@ -86,6 +89,8 @@ export default defineConfig(({ mode }) => {
     define: {
       // 空字符串时 http 层回退本地 /api；修改根 .env 后需重启 dev / 重新 build
       'import.meta.env.VITE_API_BASE': JSON.stringify(apiBase),
+      // API_TOKEN 非空（公网部署）时前端所有请求带 X-API-Token；空 = 本机不启用
+      'import.meta.env.VITE_API_TOKEN': JSON.stringify(apiToken),
     },
     test: {
       // 测试目录在项目根 tests/frontend/（与 Python 测试并列）

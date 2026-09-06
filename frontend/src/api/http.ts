@@ -13,10 +13,20 @@ import 'element-plus/es/components/message/style/css'
 
 // 穿透地址为空时回退本地 /api；有值则跨域直连后端隧道（CORS 已放行前端隧道）
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+// 可选 API 门禁 Token（与后端 config.API_TOKEN 同源，vite.config 注入）：空 = 本机不带头
+const API_TOKEN = import.meta.env.VITE_API_TOKEN || ''
 
 const http = axios.create({
   baseURL: API_BASE,
   timeout: 120_000, // Agent 对话可能较慢（LLM + 向量检索）
+})
+
+// 请求拦截：配置了 API_TOKEN（公网部署）时所有请求统一带 X-API-Token
+http.interceptors.request.use((config) => {
+  if (API_TOKEN) {
+    void config.headers.set('X-API-Token', API_TOKEN)
+  }
+  return config
 })
 
 /** 带类型的 GET（响应已被拦截器解包为 data） */

@@ -10,10 +10,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import scheduler
-from .config import CORS_ORIGINS, PUBLIC_BACKEND_URL, PUBLIC_FRONTEND_URL
+from .config import API_TOKEN, CORS_ORIGINS, PUBLIC_BACKEND_URL, PUBLIC_FRONTEND_URL
 from .routers import agent, articles, collect, sources, stats
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ===================== 可选 API Token 门禁 =====================
+# .env 配了 API_TOKEN 时，所有 /api/* 请求必须携带 X-API-Token 头（防公网
+# 扫描器刷采集/烧 LLM 额度）。运行时读 config 便于测试 monkeypatch；
+# OPTIONS（CORS preflight）放行，非 /api 路径（/ /health 静态页）不拦。
+# 个人自部署各实例填自己的 token——key/额度按部署者隔离，不共享。
+@app.middleware("http")
+async def require_api_token(request, call_next):
+    token = API_TOKEN
+    if (
+        token
+        and request.url.path.startswith("/api/")
+        and request.method != "OPTIONS"
+        and request.headers.get("X-API-Token") != token
+    ):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "缺少或错误的 X-API-Token（请检查 .env 的 API_TOKEN）"},
+        )
+    return await call_next(request)
+# ================================================================
 # ===================== 路由挂载 =====================
 app.include_router(articles.router)
 app.include_router(sources.router)

@@ -78,3 +78,11 @@ def cors_origins(page_url: str | None) -> list[str]:
 PUBLIC_BACKEND_URL = _normalize_url(os.getenv("PUBLIC_BACKEND_URL", ""))
 PUBLIC_FRONTEND_URL = _normalize_url(os.getenv("PUBLIC_FRONTEND_URL", ""))
 CORS_ORIGINS = cors_origins(PUBLIC_FRONTEND_URL)
+
+# 可选 API 门禁 Token（2026-09-06）：
+#   留空 = 不启用（本机/局域网模式，前端不带任何头，零配置零开销）；
+#   填值 = 公网暴露（cpolar / 云服务器）时所有 /api/* 请求必须携带
+#   X-API-Token 请求头，防止互联网扫描器刷采集 / 烧部署者的 LLM 额度。
+#   个人自部署各填各 token——key 与额度按部署者隔离，不共享。
+#   前端构建时 vite.config 读同名变量注入（见 vite.config.ts 注释）。
+API_TOKEN = os.getenv("API_TOKEN", "").strip() or None
