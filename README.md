@@ -28,6 +28,9 @@ cd frontend && npm run build
 
 访问 `http://127.0.0.1:8000/docs` 查看 Swagger API 文档；前端 `http://localhost:5173`。
 
+> **启用 API 门禁后**（`.env` 配置 `API_TOKEN`）：浏览器前端构建时自动带头无需处理；curl 需手动加头
+> `curl -H "X-API-Token: <token>" http://127.0.0.1:8000/api/articles`，否则 `/api/*` 返回 401。
+
 ## 数据源
 
 | 来源 | 内容 | 接口 |
@@ -37,7 +40,7 @@ cd frontend && npm run build
 | HuggingFace Papers | 每日 AI 论文 + 代码实现 | Hugging Face API（`/api/papers`），免费免认证 |
 | RSS 聚合 | 中文源聚合（RSS/Atom），当前含机器之心官方 RSS | `RSS_FEEDS` 配置（逗号分隔），免费额度限流 |
 | GitHub | 热门开源（trending 今日 star + explore 推荐 + topics 活跃榜） | 静态页解析（无官方 API），需代理 |
-| CSDN 热榜 | 中文技术博客热榜（AI / 大模型等） | 博客热榜 JSON 接口，直连 |
+| CSDN 热榜 | 中文技术博客热榜（AI / 大模型等） | 博客热榜 JSON 接口；直连国内站（`trust_env=False` 禁读环境代理，防 Docker 墙内代理劫持） |
 
 ## 项目结构
 
@@ -60,7 +63,7 @@ cd frontend && npm run build
 │       ├── github.py         # GitHub（trending/explore/topics 静态页解析，需代理）
 │       └── csdn.py           # CSDN 热榜（JSON 接口，直连）
 ├── backend/                  # FastAPI 后端 + AI Agent
-│   ├── main.py              # FastAPI app（lifespan + CORS + 5 路由）
+│   ├── main.py              # FastAPI app（lifespan + CORS + 可选 API 门禁中间件 + 静态托管）
 │   ├── database.py          # SQLite 数据层（3 表，WAL 模式）
 │   ├── vector_store.py      # ChromaDB 向量索引（语义检索）
 │   ├── scheduler.py         # APScheduler 定时采集
@@ -68,12 +71,13 @@ cd frontend && npm run build
 │   │   ├── articles.py      # GET /api/articles
 │   │   ├── sources.py       # GET /api/sources + PUT /api/sources/{name}
 │   │   ├── stats.py         # GET /api/stats
-│   │   ├── agent.py         # POST /api/agent/chat
+│   │   ├── agent.py         # POST /api/agent/chat（SSE 真流式）
 │   │   └── collect.py       # POST /api/collect（手动采集）
 │   └── agent/               # AI Agent（LLM + tool-use loop）
-│       ├── core.py          # 主循环（最多 5 轮，并发执行工具）
-│       ├── tools.py         # 工具集（search/summarize/analyze_trend）
+│       ├── core.py          # 主循环（最多 5 轮，并发执行工具；chat_stream SSE 事件流）
+│       ├── tools.py         # 6 工具集（search/get_detail/summarize/analyze_trend/trigger_collection/web_search）
 │       └── prompts.py       # System prompt
+│       └── memory.py        # 对话摘要记忆 P2（增量合并）
 ├── frontend/                  # Vue 3 SPA（Vite + TS + Element Plus + ECharts）
 │   └── src/
 │       ├── api/             # axios 数据层（5 模块 + http 实例）
@@ -82,7 +86,7 @@ cd frontend && npm run build
 │       ├── components/      # 7 组件（ArticleCard/MessageBubble 等）
 │       ├── composables/     # useTheme 双主题 + 图表色
 │       └── styles/          # 双主题令牌（cyan 青 / yellow 分栏明暗）+ EP 覆写
-├── tests/                    # 测试（252 用例，镜像 src/ + backend/）
+├── tests/                    # 测试（259 用例 = 251 单元 + 8 集成，镜像 src/ + backend/）+ 前端 24 Vitest
 ├── reports/                    # GitHub Actions 自动日报产物
 ├── .github/workflows/          # Actions：daily-report 每日自动采集日报
 ├── pyproject.toml            # uv 项目配置
@@ -120,7 +124,7 @@ cd frontend && npm run build
 | `/api/sources` | GET | 列出数据源、文章数及启用状态 |
 | `/api/sources/{name}` | PUT | 切换数据源开关 |
 | `/api/stats` | GET | 采集运行统计 + 历史明细 |
-| `/api/agent/chat` | POST | AI Agent 对话（RAG 搜索 + 摘要 + 趋势分析） |
+| `/api/agent/chat` | POST | AI Agent 对话（SSE 真流式：RAG 搜索 + 摘要 + 趋势分析 + Tavily 联网搜索） |
 | `/api/collect` | POST | 手动触发一次全量采集（202 后台执行） |
 | `/health` | GET | 健康检查 |
 
@@ -168,6 +172,7 @@ docker compose up -d --build
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
+| `API_TOKEN` | **可选 API 门禁 Token**（个人自部署语义）：配置后所有 `/api/*` 请求必须带 `X-API-Token` 头，否则 401；用于公网暴露（cpolar/云服务器）时挡扫描器烧配额与 LLM 额度。留空 = 关闭门禁（本机/局域网零配置）。生成：`python -c "import secrets;print(secrets.token_urlsafe(32))"`。前端构建注入同一值自动带头 | 空（关闭） |
 | `DASHSCOPE_API_KEY` | 阿里百炼 key（base_url 含 `dashscope` 时生效，qwen-turbo） | — |
 | `DEEPSEEK_API_KEY` | DeepSeek key（base_url 不含 dashscope 时生效） | — |
 | `LLM_MODEL_ID` | LLM 模型 ID | `qwen-turbo` |
@@ -193,3 +198,4 @@ docker compose up -d --build
 - [x] GitHub Actions 自动采集日报（2026-09-06，`.github/workflows/daily-report.yml`，每日 01:07 UTC）
 - [ ] 更多中文数据源（自托管 RSSHub 后填入 `RSS_FEEDS`）
 - [x] ranking v2（2026-09-06：LLM 质量分采集时合并评分入库，rank() 乘质量因子，卡片 Q 徽章展示）
+- [x] 可选 API 门禁 Token（2026-09-06：`API_TOKEN` + `X-API-Token` 中间件，公网暴露防护，见配置表）
