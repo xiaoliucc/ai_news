@@ -204,19 +204,24 @@ const pieChartOption = computed(() => {
       formatter: '{b} · {c} ({d}%)',
     },
     legend: {
-      bottom: 0,
+      bottom: 2,
       left: 'center',
       itemWidth: 8,
       itemHeight: 8,
-      textStyle: { color: ui.text, fontFamily: 'Rajdhani, sans-serif', fontSize: 10 },
+      itemGap: 16,
+      icon: 'rect',
+      padding: [6, 0, 0, 0],
+      textStyle: { color: ui.text, fontFamily: 'Rajdhani, sans-serif', fontSize: 10, lineHeight: 12 },
     },
     series: [
       {
         name: 'SOURCE',
         type: 'pie',
-        radius: ['52%', '74%'],
-        center: ['50%', '42%'],
+        radius: ['40%', '62%'],
+        center: ['50%', '36%'],
         padAngle: 2,
+        minAngle: 2,
+        avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 0,
           borderColor: ui.bg,
