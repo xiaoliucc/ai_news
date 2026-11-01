@@ -191,21 +191,23 @@ def test_agent_chat_stream_error_emits_error_event():
 
 
 def test_agent_chat_passes_resolved_reading_history():
-    """profile 有阅读历史时，chat_stream 收到解析后的标题列表"""
+    """profile 有阅读历史时，chat_stream 收到解析后的标题列表（批量查询一次）"""
     with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
-         patch("backend.routers.agent.get_article") as mock_get_article:
+         patch("backend.routers.agent.get_article_titles") as mock_get_titles:
         mock_profile.return_value = {
             "interests": [],
             "reading_history": ["arxiv_1", "arxiv_2"],
         }
-        mock_get_article.side_effect = [
-            {"title": "Paper One", "id": "arxiv_1"},
-            {"title": "Paper Two", "id": "arxiv_2"},
-        ]
+        mock_get_titles.return_value = {
+            "arxiv_1": "Paper One",
+            "arxiv_2": "Paper Two",
+        }
 
         resp = client.post("/api/agent/chat", json={"message": "hello"})
         assert resp.status_code == 200
+        # 只查一次（N+1 回归守卫）
+        mock_get_titles.assert_called_once_with(["arxiv_1", "arxiv_2"])
         mock_stream.assert_called_once_with(
             message="hello",
             history=None,
@@ -219,7 +221,7 @@ def test_agent_chat_reading_history_all_invalid_passes_none():
     """阅读历史 ID 全部失效时，chat_stream 收到 None（不注入空段）"""
     with patch("backend.routers.agent.chat_stream", side_effect=_stream_events([{"type": "done", "answer": "OK"}])) as mock_stream, \
          patch("backend.routers.agent.get_profile") as mock_profile, \
-         patch("backend.routers.agent.get_article", return_value=None):
+         patch("backend.routers.agent.get_article_titles", return_value={}):
         mock_profile.return_value = {
             "interests": [],
             "reading_history": ["gone_1"],
@@ -234,3 +236,34 @@ def test_agent_chat_reading_history_all_invalid_passes_none():
             reading_history=None,
             conversation_summary=None,
         )
+
+
+# ---------- 日志脱敏（H-6-5） ----------
+
+def test_preview_hides_full_message_by_default(monkeypatch):
+    """默认模式：只留前 20 字符 + 长度，日志里没有完整提问"""
+    import backend.routers.agent as mod
+
+    monkeypatch.setattr(mod, "LOG_FULL_MESSAGE", False)
+    text = "帮我总结一下昨天的多模态论文，顺便看看有没有 RAG 相关的内容"
+    preview = mod._preview(text)
+    assert preview.startswith("帮我总结一下昨天的多模态论")
+    assert "len=" in preview
+    assert "RAG" not in preview  # 20 字之后的内容不出现
+
+
+def test_preview_keeps_full_message_when_enabled(monkeypatch):
+    """LOG_FULL_MESSAGE=1 时排障模式保留全文"""
+    import backend.routers.agent as mod
+
+    monkeypatch.setattr(mod, "LOG_FULL_MESSAGE", True)
+    text = "短问题"
+    assert mod._preview(text) == repr(text)
+
+
+def test_preview_short_text_has_no_ellipsis(monkeypatch):
+    """不超过阈值时不加省略号"""
+    import backend.routers.agent as mod
+
+    monkeypatch.setattr(mod, "LOG_FULL_MESSAGE", False)
+    assert mod._preview("短问题").startswith("短问题")  # 无 …

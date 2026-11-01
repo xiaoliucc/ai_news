@@ -262,6 +262,31 @@ def get_article(article_id: str) -> dict | None:
         logger.error("Failed to query article %s: %s", article_id, e)
         return None
 
+def get_article_titles(article_ids: list[str]) -> dict[str, str]:
+    """按 ID 批量取标题（一次查询，避免逐条 get_article 的 N+1）。
+
+    Args:
+        article_ids: 文章 ID 列表（重复项自动去重）。
+
+    Returns:
+        dict[str, str]: {文章 ID: 标题}；已不存在的 ID 不会出现在结果里。
+    """
+    ids = list(dict.fromkeys(str(i) for i in article_ids))
+    if not ids:
+        return {}
+    placeholders = ",".join("?" for _ in ids)
+    try:
+        with _get_connection() as conn:
+            rows = conn.execute(
+                f"SELECT id, title FROM articles WHERE id IN ({placeholders})",
+                ids,
+            ).fetchall()
+        return {row["id"]: row["title"] for row in rows}
+    except Exception as e:
+        logger.error("Failed to batch query article titles: %s", e)
+        return {}
+
+
 def get_profile() -> dict:
     """读取用户画像（不存在时自动初始化为默认值）。
 

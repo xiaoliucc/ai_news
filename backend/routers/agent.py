@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.agent.core import chat_stream
 from backend.agent.memory import summarize_conversation
-from backend.database import get_article, get_profile, set_profile
+from backend.config import LOG_FULL_MESSAGE
+from backend.database import get_article_titles, get_profile, set_profile
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,9 @@ router = APIRouter(prefix="/api", tags=["agent"])
 # （ChatRequest.history 上限 20 条，前端恒传最近 20 条；阈值 12 → 每次归档 8 条滚动生效）
 ARCHIVE_THRESHOLD = 12
 KEEP_MESSAGES = 12
+
+# 日志里用户提问保留的字符数（默认模式；见 config.LOG_FULL_MESSAGE）
+_LOG_PREVIEW_LIMIT = 20
 
 
 class ChatRequest(BaseModel):
@@ -40,12 +44,31 @@ class ChatRequest(BaseModel):
         return v
 
 
-class ChatResponse(BaseModel):
-    answer: str
+def _preview(text: str, limit: int = _LOG_PREVIEW_LIMIT) -> str:
+    """把用户输入转成可安全写进日志的摘要（H-6-5）。
+
+    `.env` 设 `LOG_FULL_MESSAGE=1` 时返回完整原文（排障用）；默认只返回
+    长度 + 前 `limit` 个字符，避免 `docker logs` 里留下用户原话。
+
+    Args:
+        text: 原始用户输入。
+        limit: 预览保留的字符数。
+
+    Returns:
+        str: 形如 `帮我总结一下最近的(…) (len=42)` 的摘要。
+    """
+    if LOG_FULL_MESSAGE:
+        return repr(text)
+    head = " ".join(text.split())[:limit]
+    suffix = "…" if len(text) > limit else ""
+    return f"{head}{suffix} (len={len(text)})"
 
 
 def _resolve_titles(article_ids: list[str]) -> list[str] | None:
     """把阅读历史的文章 ID 列表解析为标题列表（prompt 注入用）。
+
+    一次 SQL 批量取标题（原实现逐条 get_article，50 条历史即 50 次查询）；
+    顺序按传入的 article_ids 保留，已失效的 ID 跳过。
 
     Args:
         article_ids: 文章 ID 列表（来自 user_profile.reading_history）。
@@ -53,11 +76,10 @@ def _resolve_titles(article_ids: list[str]) -> list[str] | None:
     Returns:
         list[str] | None: 标题列表；空列表或全部失效时返回 None。
     """
-    titles = []
-    for aid in article_ids:
-        a = get_article(aid)
-        if a is not None:
-            titles.append(a["title"])
+    if not article_ids:
+        return None
+    titles_by_id = get_article_titles(article_ids)
+    titles = [titles_by_id[aid] for aid in article_ids if aid in titles_by_id]
     return titles or None
 
 
@@ -93,8 +115,8 @@ async def agent_chat(req: ChatRequest) -> StreamingResponse:
     reading_history = _resolve_titles(profile.get("reading_history") or [])
 
     logger.info(
-        "Agent 对话(流式): message=%r history=%d 条 interests=%s reading_history=%d 条",
-        req.message,
+        "Agent 对话(流式): message=%s history=%d 条 interests=%s reading_history=%d 条",
+        _preview(req.message),
         len(req.history) if req.history else 0,
         interests,
         len(reading_history or []),
@@ -132,7 +154,12 @@ async def agent_chat(req: ChatRequest) -> StreamingResponse:
                 conversation_summary=summary,
             ):
                 payload = json.dumps(ev, ensure_ascii=False)
-                logger.info("SSE 事件: %s", payload[:120])
+                # token 事件是答案正文（可能包含用户原话），只在 DEBUG 记；
+                # tool/done/error 是结构化事件，INFO 级别便于排障。
+                if ev.get("type") == "token":
+                    logger.debug("SSE token: %s", payload[:80])
+                else:
+                    logger.info("SSE 事件: %s", payload[:120])
                 yield f"data: {payload}\n\n"
         except Exception as exc:  # noqa: BLE001 — 流中异常以 error 事件兜底
             logger.exception("Agent 流式对话路由异常")

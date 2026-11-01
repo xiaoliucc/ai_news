@@ -289,3 +289,43 @@ async def test_filter_ai_related_writes_quality(monkeypatch):
     assert [a.id for a in kept] == ["v0", "v2"]
     assert kept[0].quality == 80
     assert kept[1].quality is None  # 判相关但 LLM 未给质量分
+
+# ── 采集并发锁（H-5-2） ──────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_collect_once_serialized_by_lock(monkeypatch, tmp_db, no_filter):
+    """并发触发两次 collect_once 不会同时进入采集（_collect_lock 生效）。"""
+    state = {"active": 0, "peak": 0}
+
+    class SlowEngine(FakeEngine):
+        async def run(self, limit):
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+            await asyncio.sleep(0.02)
+            state["active"] -= 1
+            return await super().run(limit)
+
+    monkeypatch.setattr(
+        scheduler, "NewsEngine", lambda sources: SlowEngine([FakeArticle("a1")])
+    )
+    monkeypatch.setattr(scheduler, "save_articles", lambda **kwargs: 1)
+    monkeypatch.setattr(scheduler, "add_articles", lambda articles: len(articles))
+
+    await asyncio.gather(scheduler.collect_once(), scheduler.collect_once())
+
+    assert state["peak"] == 1, "两次采集重叠了，说明 _collect_lock 没起作用"
+
+
+# ── 六源注册表接线（H-5-3，不联网） ─────────────────────────────────────────
+
+def test_source_registry_wiring_covers_six_sources():
+    """注册表键、插件自查名、可实例化三者一致（加源时最易漏的一环）。"""
+    from src.sources.base import SourcePlugin
+
+    expected = {"hackernews", "arxiv", "huggingface_papers", "rss", "github", "csdn"}
+    assert set(scheduler.SOURCE_REGISTRY) == expected
+
+    for name, entry in scheduler.SOURCE_REGISTRY.items():
+        plugin = scheduler._instantiate_source(entry)
+        assert isinstance(plugin, SourcePlugin), f"{name} 未实例化为 SourcePlugin"
+        assert plugin.name == name, f"注册表键 {name} 与插件自查名 {plugin.name} 不一致"

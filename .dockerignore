@@ -15,9 +15,8 @@ __pycache__
 **/__pycache__
 *.pyc
 tests
-项目*.md
-后期讨论事项.md
-README.md
-CLAUDE.md
+# 文档不入镜像（docs/ 与根目录 *.md；镜像只需代码与产物）
+docs
+*.md
 Dockerfile
 docker-compose.yml

@@ -164,6 +164,34 @@ async def test_stream_emits_tool_events_then_tokens(monkeypatch, registered_arti
 
 
 @pytest.mark.asyncio
+async def test_stream_injects_reading_history_into_prompt(monkeypatch):
+    """reading_history 应注入 system prompt（避免重复推荐）。"""
+    fake = FakeClient([[_delta_chunk(content="好的。")]])
+    monkeypatch.setattr("backend.agent.core._get_client", lambda: fake)
+    monkeypatch.setattr("backend.agent.core._model_id", lambda: "fake-model")
+
+    await _collect_events(message="继续推荐", reading_history=["Attention Is All You Need"])
+
+    system_prompt = fake.chat.completions.calls[0]["messages"][0]["content"]
+    assert "避免重复推荐" in system_prompt
+    assert "Attention Is All You Need" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_stream_injects_conversation_summary_into_prompt(monkeypatch):
+    """conversation_summary 应注入 system prompt（跨会话记忆）。"""
+    fake = FakeClient([[_delta_chunk(content="好的。")]])
+    monkeypatch.setattr("backend.agent.core._get_client", lambda: fake)
+    monkeypatch.setattr("backend.agent.core._model_id", lambda: "fake-model")
+
+    await _collect_events(message="继续", conversation_summary="用户关注推理效率，已推荐 3 篇论文。")
+
+    system_prompt = fake.chat.completions.calls[0]["messages"][0]["content"]
+    assert "跨会话对话记忆" in system_prompt
+    assert "用户关注推理效率" in system_prompt
+
+
+@pytest.mark.asyncio
 async def test_stream_tool_round_emits_no_tokens(monkeypatch, registered_articles):
     """工具轮不向客户端透出 token（模型输出的是 tool_calls JSON 而非正文）。"""
     streams = [

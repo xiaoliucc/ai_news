@@ -20,8 +20,6 @@ dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "openai" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
     { name = "python-dotenv" },
     { name = "sentence-transformers" },
     { name = "uvicorn", extra = ["standard"] },
@@ -29,6 +27,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
 
@@ -43,15 +42,16 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "lxml", specifier = ">=6.1.1" },
     { name = "openai", specifier = ">=2.50.0" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "sentence-transformers", specifier = ">=5.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.1" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest-asyncio", specifier = ">=1.4.0" }]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+]
 
 [[package]]
 name = "aiohappyeyeballs"

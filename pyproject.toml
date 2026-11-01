@@ -11,8 +11,6 @@ dependencies = [
     "httpx>=0.28.1",
     "openai>=2.50.0",
     "python-dotenv>=1.0.1",
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.1",
     "chromadb>=1.5.9",
@@ -44,7 +42,9 @@ markers = [
     "slow: 慢速测试",
 ]
 
+# 仅开发/测试需要；docker build 用 `uv sync --no-dev` 时不会装进镜像
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
