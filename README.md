@@ -148,6 +148,22 @@ uv run pytest -m "not integration"
 uv run pytest -k "dedup"
 ```
 
+## 日常提交
+
+仓库每天会被 Actions 写入 `reports/daily-*.md`，所以本地总是落后于远端。提交后推送用一条命令即可：
+
+```bash
+git sync        # = git pull --rebase && git push
+```
+
+仓库已配 `pull.rebase=true` + `rebase.autoStash=true`（有未提交改动也能直接跑，不产生 merge 提交）。新机器 clone 后补一次：
+
+```bash
+git config pull.rebase true && git config rebase.autoStash true
+git config alias.sync "!git pull --rebase && git push"
+```
+
+---
 ## Docker 部署（单服务全栈）
 
 一条命令构建并启动（前端 dist + 后端 + 定时采集同一容器，单端口 8000）：
