@@ -31,6 +31,10 @@ cd frontend && npm run build
 > **启用 API 门禁后**（`.env` 配置 `API_TOKEN`）：浏览器前端构建时自动带头无需处理；curl 需手动加头
 > `curl -H "X-API-Token: <token>" http://127.0.0.1:8000/api/articles`，否则 `/api/*` 返回 401。
 
+> 📚 **全部项目文档在 [`docs/`](./docs/README.md)**（需求与设计 / 开发历程 / 踩坑与已知问题 / 功能验收清单 / 体检报告）。
+>
+> 📋 **功能全景与验收表**：[`docs/功能验收清单.md`](./docs/功能验收清单.md) —— 逐页列出交互控件的作用、每个接口的输入输出与正常结果、采集/Agent 实现流程，以及可勾选验收项（含已知限制）。改功能时同步更新该文件。
+
 ## 数据源
 
 | 来源 | 内容 | 接口 |
@@ -107,7 +111,7 @@ cd frontend && npm run build
 | ASGI 服务器 | uvicorn |
 | 数据库 | SQLite（WAL 模式） |
 | 向量存储 | ChromaDB + SentenceTransformer |
-| LLM | OpenAI 兼容端点（默认 qwen-turbo / DashScope，可切 DeepSeek） |
+| LLM | OpenAI 兼容端点（默认 deepseek-chat，可切 DashScope/qwen3.x 等） |
 | 定时任务 | APScheduler（AsyncIOScheduler） |
 | 前端框架 | Vue 3 + Vite + TypeScript |
 | UI 组件库 | Element Plus（按需引入） |
@@ -173,9 +177,15 @@ docker compose up -d --build
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `API_TOKEN` | **可选 API 门禁 Token**（个人自部署语义）：配置后所有 `/api/*` 请求必须带 `X-API-Token` 头，否则 401；用于公网暴露（cpolar/云服务器）时挡扫描器烧配额与 LLM 额度。留空 = 关闭门禁（本机/局域网零配置）。生成：`python -c "import secrets;print(secrets.token_urlsafe(32))"`。前端构建注入同一值自动带头 | 空（关闭） |
+| `RATE_LIMIT_ENABLED` | 速率限制总开关（只保护会花钱的 `POST /api/collect` 与 `POST /api/agent/chat`，其余接口不限）。`0/false/off` 关闭 | `1`（开） |
+| `RATE_LIMIT_WINDOW` | 限流窗口长度（秒） | `600` |
+| `RATE_LIMIT_CHAT` | 每窗口每客户端 Agent 对话次数（0 = 不限） | `20` |
+| `RATE_LIMIT_COLLECT` | 每窗口每客户端手动采集次数（0 = 不限） | `3` |
+| `ENABLE_DOCS` | 是否暴露 `/docs`、`/redoc`、`/openapi.json`。**默认关**——公网部署时接口清单等于把参数结构送给扫描器；本地调试设 `1` 打开 | `0`（关） |
+| `LOG_FULL_MESSAGE` | 是否在日志里记录用户提问原文。**默认关**——关闭时只记长度 + 前 20 字符（SSE 的 token 事件降为 DEBUG），避免 `docker logs` 留下用户原话 | `0`（关） |
 | `DASHSCOPE_API_KEY` | 阿里百炼 key（base_url 含 `dashscope` 时生效，qwen-turbo） | — |
 | `DEEPSEEK_API_KEY` | DeepSeek key（base_url 不含 dashscope 时生效） | — |
-| `LLM_MODEL_ID` | LLM 模型 ID | `qwen-turbo` |
+| `LLM_MODEL_ID` | LLM 模型 ID | `deepseek-chat` |
 | `LLM_BASE_URL` | LLM API 地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `LLM_TIMEOUT` | LLM 请求超时（秒） | `60` |
 | `TAVILY_API_KEY` | Agent web_search 联网搜索 key（采集库外实时信息） | — |
@@ -199,3 +209,4 @@ docker compose up -d --build
 - [ ] 更多中文数据源（自托管 RSSHub 后填入 `RSS_FEEDS`）
 - [x] ranking v2（2026-09-06：LLM 质量分采集时合并评分入库，rank() 乘质量因子，卡片 Q 徽章展示）
 - [x] 可选 API 门禁 Token（2026-09-06：`API_TOKEN` + `X-API-Token` 中间件，公网暴露防护，见配置表）
+- [x] 安全收尾（2026-11-01：`/docs` 默认关闭、nosniff/DENY/no-referrer 安全头、提问日志脱敏、冒烟测试 8 例）
