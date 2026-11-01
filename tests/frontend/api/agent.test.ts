@@ -95,4 +95,23 @@ describe('api/agent (SSE 真流式)', () => {
     })
     expect(onError).toHaveBeenCalledWith('请求失败（HTTP 500），请检查后端服务')
   })
+
+  it('429 限流时透传后端 detail（而非通用文案）', async () => {
+    const detail = '请求过于频繁：/api/agent/chat 每 600 秒最多 20 次，请 42 秒后重试'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    )
+    const onError = vi.fn()
+    await new Promise<void>((resolve) => {
+      chatStream('x', [], { onError: (m) => (onError(m), resolve()) })
+    })
+    expect(onError).toHaveBeenCalledWith(detail)
+  })
 })

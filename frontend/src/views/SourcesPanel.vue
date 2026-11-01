@@ -110,10 +110,18 @@ async function onCollect(): Promise<void> {
       </template>
     </div>
 
-    <!-- 警告（最后一个源被禁用，对应后端 400） -->
+    <!-- 警告（最后一个源被禁用，对应后端 400）；可手动关闭，刷新成功后也会自动清掉 -->
     <div v-if="warning" class="spanel__warn" role="alert" data-od-id="sources-warning">
       <span class="spanel__warn-icon" aria-hidden="true"></span>
       <span class="spanel__warn-text">{{ t('misc.warn') }}</span>
+      <button
+        type="button"
+        class="spanel__warn-close"
+        :aria-label="t('misc.dismiss')"
+        :title="t('misc.dismiss')"
+        data-od-id="sources-warning-dismiss"
+        @click="store.clearWarning()"
+      >×</button>
     </div>
 
     <!-- 底部统计区 -->
@@ -310,6 +318,20 @@ async function onCollect(): Promise<void> {
   font-size: 11px;
   line-height: 1.5;
   color: var(--warn);
+}
+.spanel__warn-close {
+  margin-left: auto;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--warn);
+  opacity: 0.65;
+  cursor: pointer;
+}
+.spanel__warn-close:hover {
+  opacity: 1;
 }
 
 /* 底部统计 */

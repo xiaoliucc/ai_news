@@ -6,18 +6,10 @@
    ============================================================ */
 
 import type { EChartsOption } from 'echarts'
+import { SERIES_COLORS } from '@/constants/sources'
 
-/** 终端地风格图表系列配色（与全局令牌一致） */
-export const ENDFIELD_SERIES_COLORS = {
-  hackernews: '#00d4aa',
-  arxiv: '#3b82f6',
-  huggingface_papers: '#a855f7',
-  rss: '#e87a3a',
-  github: '#22c55e',
-  csdn: '#E6452A',
-} as const
-
-export type EndfieldSeriesKey = keyof typeof ENDFIELD_SERIES_COLORS
+/** 终端地风格图表系列配色（无色主题版本；两套主题色见 constants/sources.ts） */
+export const ENDFIELD_SERIES_COLORS = SERIES_COLORS.cyan
 
 /** 将颜色转为 8% 透明度填充 */
 export function hexToRgba(hex: string, alpha: number): string {

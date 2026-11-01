@@ -26,13 +26,14 @@ export const useSourcesStore = defineStore('sources', () => {
   const enabledCount = computed(() => sources.value.filter((s) => s.enabled).length)
 
   /* ---------- actions ---------- */
-  /** 拉取源列表与统计（两个请求并行） */
+  /** 拉取源列表与统计（两个请求并行）；成功即视为状态已同步，清掉上次操作的警告 */
   async function fetchSources(): Promise<void> {
     loading.value = true
     try {
       const [srcRes, statsRes] = await Promise.all([apiFetchSources(), apiFetchStats(10)])
       sources.value = srcRes.sources
       stats.value = statsRes
+      warning.value = null
     } finally {
       loading.value = false
     }

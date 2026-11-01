@@ -63,14 +63,6 @@ export interface ChatMessage {
 export type SourceName = 'hackernews' | 'arxiv' | 'huggingface_papers' | 'rss' | 'github' | 'csdn'
 export type SourceCategory = 'tech_community' | 'academic' | 'chinese_media'
 
-export type ToolName = 'SEARCH' | 'SUMMARIZE' | 'ANALYZE_TREND' | 'TRIGGER_COLLECTION'
-
 export type SortMode = 'latest' | 'score' | 'relevance'
 export type MainView = 'articles' | 'trends' | 'hotlist'
 
-/** 侧栏源的分组展示名（全大写） */
-export const SOURCE_GROUP_LABELS: Record<SourceCategory, string> = {
-  tech_community: 'TECH COMMUNITY',
-  academic: 'ACADEMIC',
-  chinese_media: 'CHINESE MEDIA',
-}

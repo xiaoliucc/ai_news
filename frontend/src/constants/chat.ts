@@ -1,12 +1,18 @@
 /* ============================================================
-   AGENT 预设数据 —— 欢迎语 / 演示历史 / 快捷操作 / 轮次上限
-   真实对话走 POST /api/agent/chat；此处仅保留 UI 初始态与限制常量
-   （原 mock 文章/源/统计数据已随真实 API 接入移除）
+   AGENT 对话常量与初始文案（原 frontend/src/mock/data.ts）
+   生产代码不应从 `mock/` 目录取常量——接入真实 API 后这里只剩
+   UI 初始态与限制，与"mock"无关，故移到 constants/（2026-11-01, H-4-5）。
    ============================================================ */
 
 import type { ChatMessage } from '@/types'
 
-/* ---------- 初始欢迎语 ---------- */
+/** 单条消息最大字符数（与后端 ChatRequest.message 的 max_length 对齐） */
+export const MAX_MESSAGE_CHARS = 4000
+
+/** 对话历史上限轮数（与后端 history max_length 对齐） */
+export const MAX_HISTORY_TURNS = 20
+
+/** 初始欢迎语 */
 export const WELCOME_MESSAGE: ChatMessage = {
   role: 'assistant',
   content:
@@ -14,10 +20,11 @@ export const WELCOME_MESSAGE: ChatMessage = {
   timestamp: '2026-08-18T09:30:00+08:00',
 }
 
-export const mockInitialMessages: ChatMessage[] = [WELCOME_MESSAGE]
+/** 初始消息列表（重置对话用） */
+export const INITIAL_MESSAGES: ChatMessage[] = [WELCOME_MESSAGE]
 
-/* ---------- 演示历史（loadHistory 调试用） ---------- */
-export const mockHistory: ChatMessage[] = [
+/** 演示历史（调试 loadHistory 用，非真实数据） */
+export const DEMO_HISTORY: ChatMessage[] = [
   {
     role: 'user',
     content: '总结一下机器之心最近一周的报道重点',
@@ -50,14 +57,10 @@ export const mockHistory: ChatMessage[] = [
   },
 ]
 
-/* ---------- 快捷操作 ---------- */
+/** 快捷操作（点击后把 prompt 作为用户消息发出） */
 export const QUICK_ACTIONS: Array<{ key: string; prompt: string }> = [
   { key: 'todaySummary', prompt: '总结今天的 AI 热点' },
   { key: 'researchTrends', prompt: '分析最近的研究趋势' },
   { key: 'recommendPapers', prompt: '推荐值得阅读的论文' },
   { key: 'triggerCollect', prompt: '立即触发一次数据采集' },
 ]
-
-/* ---------- 对话限制 ---------- */
-export const MOCK_MAX_CHARS = 4000
-export const MOCK_MAX_HISTORY = 20

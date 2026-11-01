@@ -7,6 +7,7 @@ import { hexToRgba } from '@/utils/endfieldChartTheme'
 import StatBlock from '@/components/StatBlock.vue'
 import { useI18n } from '@/utils/i18n'
 import { chartColorsFor, useTheme } from '@/composables/useTheme'
+import { SOURCE_NAMES } from '@/constants/sources'
 
 const articlesStore = useArticlesStore()
 const sourcesStore = useSourcesStore()
@@ -36,14 +37,8 @@ const kpiAvgScore = computed(() => {
 /** 按当前主题取图表系列色与界面色 */
 const chartColors = computed(() => chartColorsFor(theme.value))
 
-const SERIES = [
-  { name: 'hackernews' },
-  { name: 'arxiv' },
-  { name: 'huggingface_papers' },
-  { name: 'rss' },
-  { name: 'github' },
-  { name: 'csdn' },
-] as const
+/** 系列列表来自唯一清单（顺序 = 侧栏顺序），避免这里再加一处硬编码 */
+const SERIES = SOURCE_NAMES.map((name) => ({ name }))
 
 /** 时间折线图 */
 const trendChartOption = computed(() => {
@@ -81,7 +76,7 @@ const trendChartOption = computed(() => {
   })
   return {
     backgroundColor: 'transparent',
-    color: [colors.hackernews, colors.arxiv, colors.huggingface_papers, colors.rss, colors.github],
+    color: SOURCE_NAMES.map((n) => colors[n]),
     legend: {
       top: 0,
       right: 0,

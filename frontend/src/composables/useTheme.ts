@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { ref, watch } from 'vue'
+import { SERIES_COLORS as SOURCE_SERIES_COLORS } from '@/constants/sources'
 
 export type Theme = 'cyan' | 'yellow'
 
@@ -43,13 +44,8 @@ export function useTheme() {
   return { theme, toggleTheme }
 }
 
-/** 图表系列色 / 界面色（非组件环境使用） */
-export const SERIES_COLORS: Record<Theme, Record<string, string>> = {
-  cyan: { hackernews: '#00d4aa', arxiv: '#3b82f6', huggingface_papers: '#a855f7', rss: '#e87a3a', github: '#22c55e', csdn: '#E6452A' },
-  // 高饱和亮黄（hackernews 主色）/ 低饱和蓝（arxiv，浅底可见）/ 低饱和紫（HF）/ 低饱和橙（rss）/ 低饱和绿（github，浅底可见）
-  // 注：arxiv 原为近白 #E8E8E6，在浅色卡片背景（#ECEEED/白）上不可见，改为 #5B8DD9
-  yellow: { hackernews: '#E8E237', arxiv: '#5B8DD9', huggingface_papers: '#9B8FD6', rss: '#E8A06C', github: '#3D9E50', csdn: '#B34A3C' },
-}
+/** 图表系列色（每源两套主题色统一定义在 constants/sources.ts） */
+export const SERIES_COLORS: Record<Theme, Record<string, string>> = SOURCE_SERIES_COLORS
 
 export const CHART_UI: Record<Theme, { bg: string; accent: string; axis: string; text: string; ink: string }> = {
   cyan: { bg: '#0a0e17', accent: '#00d4aa', axis: '#334155', text: '#64748b', ink: '#e2e8f0' },

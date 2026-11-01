@@ -8,12 +8,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { chatStream, type ChatStreamHandle } from '@/api/agent'
 import {
-  MOCK_MAX_CHARS,
-  MOCK_MAX_HISTORY,
-  mockHistory,
-  mockInitialMessages,
+  DEMO_HISTORY,
+  INITIAL_MESSAGES,
+  MAX_HISTORY_TURNS,
+  MAX_MESSAGE_CHARS,
   QUICK_ACTIONS,
-} from '@/mock/data'
+} from '@/constants/chat'
 import type { ChatMessage } from '@/types'
 
 export interface ActiveTool {
@@ -30,8 +30,8 @@ export const useAgentStore = defineStore('agent', () => {
   const history = ref<ChatMessage[]>([])
   const activeTool = ref<ActiveTool | null>(null)
   const replyBuffer = ref('')
-  const maxChars = ref(MOCK_MAX_CHARS)
-  const maxHistory = ref(MOCK_MAX_HISTORY)
+  const maxChars = ref(MAX_MESSAGE_CHARS)
+  const maxHistory = ref(MAX_HISTORY_TURNS)
   const quickActions = ref(QUICK_ACTIONS)
   let streamHandle: ChatStreamHandle | null = null
 
@@ -41,7 +41,7 @@ export const useAgentStore = defineStore('agent', () => {
   /* ---------- actions ---------- */
   function loadInitial(): void {
     if (messages.value.length === 0) {
-      messages.value = mockInitialMessages.map((m) => ({ ...m }))
+      messages.value = INITIAL_MESSAGES.map((m) => ({ ...m }))
     }
   }
 
@@ -63,7 +63,7 @@ export const useAgentStore = defineStore('agent', () => {
     activeTool.value = null
 
     // 轮次上限（20 轮），移除最早一轮
-    if (history.value.length >= MOCK_MAX_HISTORY) {
+    if (history.value.length >= MAX_HISTORY_TURNS) {
       history.value.shift()
     }
     history.value.push({ role: 'user', content: trimmed, timestamp: new Date().toISOString() })
@@ -148,7 +148,7 @@ export const useAgentStore = defineStore('agent', () => {
     replyBuffer.value = ''
     activeTool.value = null
     isWaiting.value = false
-    messages.value = mockInitialMessages.map((m) => ({ ...m }))
+    messages.value = INITIAL_MESSAGES.map((m) => ({ ...m }))
     history.value = []
   }
 
@@ -170,8 +170,8 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function loadHistory(): void {
-    messages.value = mockHistory.map((m) => ({ ...m }))
-    history.value = mockHistory.map((m) => ({ ...m }))
+    messages.value = DEMO_HISTORY.map((m) => ({ ...m }))
+    history.value = DEMO_HISTORY.map((m) => ({ ...m }))
   }
 
   return {

@@ -1,31 +1,15 @@
 /* ============================================================
    ARTICLES STORE —— 对应 GET /api/articles（days/sources/limit 参数）
-   客户端过滤 + 聚合 getters（trendData / tagFrequency / top10）
-   Mock 实现：setTimeout 模拟网络延迟
+   客户端过滤/排序/分页 + 聚合 getters（tagFrequency / sourceDistribution / top10）
+   趋势折线图数据由 TrendsView 自己按 7/14 天窗口算，store 不再重复聚合。
    ============================================================ */
 
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { fetchArticles as apiFetchArticles } from '@/api/articles'
 import type { Article, SortMode, SourceName } from '@/types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-
-export const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
-  { value: 'latest', label: 'LATEST' },
-  { value: 'score', label: 'HOT' },
-  { value: 'relevance', label: 'RELEVANCE' },
-]
-
-export interface TrendPoint {
-  date: string // YYYY-MM-DD
-  hackernews: number
-  arxiv: number
-  huggingface_papers: number
-  rss: number
-  github: number
-  csdn: number
-}
 
 export interface TagFreq {
   name: string
@@ -62,10 +46,10 @@ export const useArticlesStore = defineStore('articles', () => {
     }
   }
 
-  // days/sources 变化时重新拉取（时间窗口与源筛选由后端执行）
-  watch([days, selectedSources], () => {
-    void fetchArticles()
-  })
+  // days/sources 是**后端**筛选条件：变化后必须重新拉取。
+  // 曾用 watch([days, selectedSources]) 隐式触发（H-4-2），但那样"点一下会不会发请求"
+  // 要跨 4 处才能确认；改为 setFilter 里显式调用（2026-11-01）。
+  // 注意：直接写 store.days/store.selectedSources 不会重拉，组件请走 setFilter。
 
   function setFilter(patch: {
     days?: 1 | 3 | 7 | 14
@@ -73,11 +57,13 @@ export const useArticlesStore = defineStore('articles', () => {
     search?: string
     sort?: SortMode
   }): void {
+    const serverSideChanged = patch.days !== undefined || patch.sources !== undefined
     if (patch.days !== undefined) days.value = patch.days
     if (patch.sources !== undefined) selectedSources.value = patch.sources
     if (patch.search !== undefined) search.value = patch.search
     if (patch.sort !== undefined) sort.value = patch.sort
     page.value = 1
+    if (serverSideChanged) void fetchArticles()
   }
 
   function setPage(p: number): void {
@@ -92,13 +78,12 @@ export const useArticlesStore = defineStore('articles', () => {
   }
 
   /* ---------- getters ---------- */
-  const timeCutoff = computed(() => Date.now() - days.value * DAY_MS)
-
+  // 口径说明（H-2-4）：days/sources 由后端按 collected_at 过滤，前端**不再重复筛**——
+  // 否则后端用入库时间、前端用发布时间，边界日会出现"请求回来了列表却空一截"。
+  // 这里只做 search / sort 这类纯客户端操作。
   const filteredArticles = computed<Article[]>(() => {
     const kw = search.value.trim().toLowerCase()
     let list = articles.value.filter((a) => {
-      if (a.published_at && Date.parse(a.published_at) < timeCutoff.value) return false
-      if (selectedSources.value.length > 0 && !selectedSources.value.includes(a.source)) return false
       if (kw) {
         const hit =
           a.title.toLowerCase().includes(kw) ||
@@ -160,28 +145,6 @@ export const useArticlesStore = defineStore('articles', () => {
       .slice(0, 10)
   })
 
-  /** 时间折线图数据：按日聚合文章数，多系列按 source 分色 */
-  const trendData = computed<TrendPoint[]>(() => {
-    const n = days.value
-    const points: TrendPoint[] = []
-    const now = Date.now()
-    for (let i = n - 1; i >= 0; i--) {
-      const d = new Date(now - i * DAY_MS)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      points.push({ date: key, hackernews: 0, arxiv: 0, huggingface_papers: 0, rss: 0, github: 0, csdn: 0 })
-    }
-    const map = new Map(points.map((p) => [p.date, p]))
-    for (const a of articles.value) {
-      const ts = Date.parse(a.published_at ?? '')
-      if (!ts || ts < now - n * DAY_MS) continue
-      const d = new Date(ts)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      const p = map.get(key)
-      if (p) p[a.source] += 1
-    }
-    return points
-  })
-
   /** 词频 Top 10（从 tags 字段聚合） */
   const tagFrequency = computed<TagFreq[]>(() => {
     const freq = new Map<string, number>()
@@ -205,22 +168,6 @@ export const useArticlesStore = defineStore('articles', () => {
     return [...counts.entries()].map(([name, value]) => ({ name, value }))
   })
 
-  /** 趋势摘要（Agent 回复使用） */
-  const trendSummary = computed(() => {
-    const top = tagFrequency.value.slice(0, 3)
-    const hotSource = [...sourceDistribution.value].sort((a, b) => b.value - a.value)[0]
-    const weekCount = weekTop10.value.length
-    return {
-      topTags: top.map((t) => t.name),
-      hotSource: hotSource?.name ?? 'hackernews',
-      hotSourceCount: hotSource?.value ?? 0,
-      weekArticles: articles.value.filter(
-        (a) => (Date.parse(a.published_at ?? '') || 0) >= Date.now() - 7 * DAY_MS,
-      ).length,
-      weekTopCount: weekCount,
-    }
-  })
-
   return {
     articles,
     loading,
@@ -242,9 +189,7 @@ export const useArticlesStore = defineStore('articles', () => {
     totalPages,
     todayTop10,
     weekTop10,
-    trendData,
     tagFrequency,
     sourceDistribution,
-    trendSummary,
   }
 })

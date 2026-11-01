@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { ChatMessage } from '@/types'
 import { formatRelativeTime } from '@/composables/useRelativeTime'
 import ToolCallBadge from '@/components/ToolCallBadge.vue'
@@ -22,11 +23,45 @@ const time = computed(() =>
   formatRelativeTime(props.message.timestamp, Date.now(), lang.value),
 )
 
-/** 流式内容（含 Markdown 渲染，代码块等） */
-const rendered = computed(() => {
-  const text = props.streamingText ?? props.message.content
-  return marked.parse(text, { async: false, breaks: true }) as string
+/** 允许保留的标签：只覆盖 Markdown 实际产出的结构（段落/代码/列表/表格/标题/引用） */
+const ALLOWED_TAGS = [
+  'p', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u', 's', 'del',
+  'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td',
+]
+
+/** 允许保留的属性：不含 src / style / on*，因此图片与内联样式会被剥离 */
+const ALLOWED_ATTR = ['href', 'title', 'target', 'rel', 'class']
+
+/** 外链统一新窗口 + noopener，防止被引用页面通过 window.opener 反向操作本页 */
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  const el = node as Element
+  if (el.tagName === 'A') {
+    el.setAttribute('target', '_blank')
+    el.setAttribute('rel', 'noopener noreferrer nofollow')
+  }
 })
+
+/**
+ * Markdown → 安全 HTML。
+ *
+ * `marked` 只做语法转换、不做安全过滤（v12 起内置 sanitize 已移除），而 Agent 回答
+ * 会引用采集到的外部标题/摘要，未经消毒直接交给 `v-html` 会形成存储型 XSS
+ * （恶意 RSS 条目 → 入库 → 被 LLM 原样引用 → 在本页执行脚本）。因此渲染结果一律
+ * 过 DOMPurify 白名单：非白名单标签与属性（`<script>`、`onerror=`、`src=` 等）被剥离。
+ */
+function renderSafe(text: string): string {
+  const html = marked.parse(text, { async: false, breaks: true }) as string
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: false,
+  })
+}
+
+/** 流式内容（含 Markdown 渲染，代码块等） */
+const rendered = computed(() => renderSafe(props.streamingText ?? props.message.content))
 
 /** 展示用的工具调用序列：静态消息用 message.toolCalls，流式中用 activeTool */
 const toolCalls = computed(() => {

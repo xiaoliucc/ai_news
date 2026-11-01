@@ -53,14 +53,38 @@ describe('stores/articles', () => {
     expect(store.articles[1].summary).toBe('about LLM')
   })
 
-  it('days 变化自动重新拉取（后端执行窗口筛选）', async () => {
+  it('setFilter 改 days/sources 会重拉（后端执行窗口筛选）', async () => {
     const store = useArticlesStore()
     await store.fetchArticles()
     expect(mockedApi).toHaveBeenCalledTimes(1)
 
-    store.days = 14
+    store.setFilter({ days: 14 })
     await vi.waitFor(() => expect(mockedApi).toHaveBeenCalledTimes(2))
     expect(mockedApi).toHaveBeenLastCalledWith({ days: 14, sources: [], limit: 50 })
+  })
+
+  it('setFilter 只改 search/sort 不发请求（纯客户端过滤）', async () => {
+    const store = useArticlesStore()
+    await store.fetchArticles()
+    expect(mockedApi).toHaveBeenCalledTimes(1)
+
+    store.setFilter({ search: 'transformer', sort: 'score' })
+    expect(mockedApi).toHaveBeenCalledTimes(1)
+  })
+
+  it('filteredArticles 不再重复按 source 过滤（口径在后端，H-2-4）', async () => {
+    const store = useArticlesStore()
+    mockedApi.mockResolvedValue({
+      total: 2,
+      articles: [
+        makeArticle({ id: 'a1', source: 'arxiv' }),
+        makeArticle({ id: 'a2', source: 'hackernews' }),
+      ],
+    })
+    await store.fetchArticles()
+    store.selectedSources = ['hackernews']
+    // 后端已按 sources 过滤，前端原样展示（否则会二次筛掉 arxiv 条目）
+    expect(store.filteredArticles).toHaveLength(2)
   })
 
   it('客户端搜索过滤标题/摘要/标签', async () => {

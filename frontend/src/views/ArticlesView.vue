@@ -13,6 +13,7 @@ import ArticleCard from '@/components/ArticleCard.vue'
 import TrendsView from '@/views/TrendsView.vue'
 import HotlistView from '@/views/HotlistView.vue'
 import { useI18n } from '@/utils/i18n'
+import { SOURCE_NAMES } from '@/constants/sources'
 import type { MainView, SourceName } from '@/types'
 
 const articlesStore = useArticlesStore()
@@ -35,11 +36,10 @@ const TIME_RANGES: Array<{ value: 1 | 3 | 7 | 14; label: string }> = [
   { value: 14, label: '14D' },
 ]
 
-/** 来源筛选选项（与后端 SOURCE_META 一致，按 category 配色） */
-const sourceOptions = computed(() => {
-  const names: SourceName[] = ['hackernews', 'arxiv', 'huggingface_papers', 'rss', 'github', 'csdn']
-  return names.map((n) => ({ value: n, label: t(`srcLabel.${n}`) }))
-})
+/** 来源筛选选项（顺序来自 constants/sources.ts，文案按 srcLabel 取） */
+const sourceOptions = computed(() =>
+  SOURCE_NAMES.map((n) => ({ value: n, label: t(`srcLabel.${n}`) })),
+)
 
 const sortOptions = computed(() => {
   const keys = ['latest', 'score', 'relevance'] as const

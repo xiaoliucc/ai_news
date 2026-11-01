@@ -107,6 +107,7 @@ const dict = {
       zh: '至少保留一个启用的信息源（对应后端 400：ALL_SOURCES_DISABLED）',
       en: 'Keep at least one source enabled (backend 400: ALL_SOURCES_DISABLED)',
     },
+    dismiss: { zh: '关闭提示', en: 'Dismiss' },
     collected: { zh: '采集已触发', en: 'COLLECTION TRIGGERED' },
     themeTitle: { zh: '切换视觉主题（青 / 黄）', en: 'Toggle theme (CYAN / YELLOW)' },
     panelOpen: { zh: '展开 AI 对话面板', en: 'Expand AI panel' },
@@ -148,6 +149,3 @@ export function tr(path: string, l: Lang): string {
   return t(path, l)
 }
 
-export function getLang(): Lang {
-  return lang.value
-}

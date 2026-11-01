@@ -51,9 +51,16 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
-        // vitest 场景：测试文件位于 root 外的 tests/frontend/，裸依赖解析失败，
-        // 显式指向真实 node_modules（同路径，dev/build 行为不变）
+        // vitest 场景：测试文件位于 root 外的 tests/frontend/，裸依赖解析失败
+        // （node_modules 在 frontend/ 下，向上查找找不到），显式指向真实
+        // node_modules（同路径，dev/build 行为不变）。
         pinia: fileURLToPath(new URL('./node_modules/pinia', import.meta.url)),
+        '@vue/test-utils': fileURLToPath(
+          new URL('./node_modules/@vue/test-utils', import.meta.url),
+        ),
+        dompurify: fileURLToPath(
+          new URL('./node_modules/dompurify', import.meta.url),
+        ),
       },
     },
     server: {

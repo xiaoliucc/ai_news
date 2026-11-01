@@ -65,7 +65,16 @@ export function chatStream(
         signal: controller.signal,
       })
       if (!res.ok) {
-        handlers.onError?.(`请求失败（HTTP ${res.status}），请检查后端服务`)
+        // 429（限流）等场景后端会回 {"detail": "..."}，优先透传可读原因；
+        // 网关错误页之类非 JSON 响应则退回通用文案。
+        let detail = ''
+        try {
+          const body = (await res.json()) as { detail?: unknown }
+          if (typeof body.detail === 'string') detail = body.detail
+        } catch {
+          /* 非 JSON 响应，走下方通用提示 */
+        }
+        handlers.onError?.(detail || `请求失败（HTTP ${res.status}），请检查后端服务`)
         return
       }
       if (!res.body) {
